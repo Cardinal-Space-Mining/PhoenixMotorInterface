@@ -7,12 +7,29 @@
 
 #include <unistd.h>
 
+#include "custom_types/msg/talon_ctrl.hpp"
+#include "custom_types/msg/talon_info.hpp"
+
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/int32.hpp>
 
-#include "TalonWrapper.hpp"
+#define Phoenix_No_WPI // remove WPI dependencies
+#include "ctre/Phoenix.h"
+#include "ctre/phoenix/cci/Unmanaged_CCI.h"
+#include "ctre/phoenix/platform/Platform.hpp"
+#include "ctre/phoenix/unmanaged/Unmanaged.h"
 
 using namespace std::chrono_literals;
+
+using TalonSRX = ctre::phoenix::motorcontrol::can::TalonSRX;
+using TalonCtrlSub =
+    rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr;
+using TalonInfoPub = rclcpp::Publisher<custom_types::msg::TalonInfo>::SharedPtr;
+
+struct Gains
+{
+    double P, I, D, F;
+};
 
 namespace constants
 {
@@ -34,23 +51,25 @@ public:
     , heartbeat_sub(this->create_subscription<std_msgs::msg::Int32>(
           "heartbeat", 10, [](const std_msgs::msg::Int32 & msg)
           { ctre::phoenix::unmanaged::Unmanaged::FeedEnable(msg.data); }))
-    , track_right(*this, "track_right", 0)
-    , track_left(*this, "track_left", 1)
-    , trencher(*this, "trencher", 2)
-    , hopper_belt(*this, "hopper_belt", 3)
-    , hopper_actuator(*this, "hopper_actuator", 4)
+    , hopper_ctrl(this->create_subscription<custom_types::msg::TalonCtrl>(
+        "hopper_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg)
+        { execute_ctrl(this->hopper_actuator, msg); }))
     {
 
         RCLCPP_DEBUG(this->get_logger(), "Initialized Node");
     }
 
 private:
-    std::shared_ptr<rclcpp::Subscription<std_msgs::msg::Int32>> heartbeat_sub;
+    void execute_ctrl(TalonSRX &motor, const custom_types::msg::TalonCtrl &msg) {
+
+    }
 
 private:
-    TalonWrapper<TalonFX6> track_right, track_left, trencher, hopper_belt;
+    std::shared_ptr<rclcpp::Subscription<std_msgs::msg::Int32>> heartbeat_sub;
+    rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr hopper_ctrl;
 
-    TalonWrapper<TalonSRX5> hopper_actuator;
+private:
+    TalonSRX hopper_actuator{5, constants::INTERFACE};
 };
 
 int main(int argc, char ** argv)

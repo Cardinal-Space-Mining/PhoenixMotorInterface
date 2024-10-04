@@ -18,13 +18,13 @@ find_package(std_msgs REQUIRED)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 
-add_executable(main src/main.cpp src/TalonWrapperImpl.cpp)
-ament_target_dependencies(main rclcpp std_msgs custom_types)
-target_include_directories(main PUBLIC
+add_executable(robot_pheonix5 src/main.cpp)
+ament_target_dependencies(robot_pheonix5 rclcpp std_msgs custom_types)
+target_include_directories(robot_pheonix5 PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libs/phoenix5/include>
   $<INSTALL_INTERFACE:include>)
-target_compile_features(main PUBLIC c_std_99 cxx_std_20)  # Require C99 and C++20
+target_compile_features(robot_pheonix5 PUBLIC c_std_99 cxx_std_20)  # Require C99 and C++20
 
 if (${CMAKE_LIBRARY_ARCHITECTURE} STREQUAL "arm-linux-gnueabihf") # Jetson TK1 / Pi
     set(PHOENIX_LIBS_DIR ${CMAKE_SOURCE_DIR}/libs/phoenix5/lib/arm32)
@@ -36,7 +36,7 @@ endif()
 
 
  
-target_link_libraries(main ${PHOENIX_LIBS_DIR}/libCTRE_Phoenix.so ${PHOENIX_LIBS_DIR}/libCTRE_PhoenixCCI.so ${PHOENIX_LIBS_DIR}/libCTRE_PhoenixTools.so)
+target_link_libraries(robot_pheonix5 ${PHOENIX_LIBS_DIR}/libCTRE_Phoenix.so ${PHOENIX_LIBS_DIR}/libCTRE_PhoenixCCI.so ${PHOENIX_LIBS_DIR}/libCTRE_PhoenixTools.so)
 
 
 
@@ -48,7 +48,7 @@ install(FILES
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(TARGETS main
+install(TARGETS robot_pheonix5
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
