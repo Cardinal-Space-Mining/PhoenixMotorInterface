@@ -22,13 +22,17 @@
 using namespace std::chrono_literals;
 
 using TalonSRX = ctre::phoenix::motorcontrol::can::TalonSRX;
-using TalonCtrlSub =
-    rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr;
+using TalonCtrlSub = rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr;
 using TalonInfoPub = rclcpp::Publisher<custom_types::msg::TalonInfo>::SharedPtr;
 
 struct Gains
 {
     double P, I, D, F;
+};
+
+enum class BrakeMode : uint8_t {
+    COAST = 0,
+    BRAKE = 1
 };
 
 namespace constants
@@ -47,21 +51,62 @@ class Robot : public rclcpp::Node
 {
 public:
     Robot()
-    : rclcpp::Node("robot")
+    : rclcpp::Node("robot_phoenix5")
     , heartbeat_sub(this->create_subscription<std_msgs::msg::Int32>(
           "heartbeat", 10, [](const std_msgs::msg::Int32 & msg)
           { ctre::phoenix::unmanaged::Unmanaged::FeedEnable(msg.data); }))
+    , info_timer(
+        this->create_wall_timer(100ms, [this]() { this->info_periodic(); }))
     , hopper_ctrl(this->create_subscription<custom_types::msg::TalonCtrl>(
         "hopper_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg)
         { execute_ctrl(this->hopper_actuator, msg); }))
+    , hopper_info(this->create_publisher<custom_types::msg::TalonInfo>(
+        "hopper_info", 10))
     {
+
+        config(hopper_actuator, constants::DEFAULT_GAINS, BrakeMode::BRAKE);
 
         RCLCPP_DEBUG(this->get_logger(), "Initialized Node");
     }
 
 private:
-    void execute_ctrl(TalonSRX &motor, const custom_types::msg::TalonCtrl &msg) {
 
+    void config(TalonSRX &motor, const Gains &gains, BrakeMode brake_mode) {
+        // config motor settings here
+        motor.Config_kD(0, gains.P);
+        motor.Config_kP(0, gains.I);
+        motor.Config_kI(0, gains.D);
+        motor.Config_kF(0, gains.F);
+
+        switch (brake_mode) {
+            case BrakeMode::BRAKE:
+                motor.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+                break;
+            case BrakeMode::COAST:
+                motor.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Coast);
+                break;
+        }
+    }
+
+    void execute_ctrl(TalonSRX &motor, const custom_types::msg::TalonCtrl &msg) {
+        motor.Set(static_cast<ctre::phoenix::motorcontrol::ControlMode>(msg.mode), msg.value);
+    }
+
+    custom_types::msg::TalonInfo get_info(TalonSRX &motor) {
+        custom_types::msg::TalonInfo info;
+        info.temperature    = motor.GetTemperature();
+        info.bus_voltage    = motor.GetBusVoltage();
+        info.output_percent = motor.GetMotorOutputPercent();
+        info.output_voltage = motor.GetMotorOutputVoltage();
+        info.output_current = motor.GetOutputCurrent();
+        info.position       = motor.GetSelectedSensorPosition();
+        info.velocity       = motor.GetSelectedSensorVelocity();
+
+        return info;
+    }
+
+    void info_periodic() {
+        hopper_info->publish(get_info(hopper_actuator));
     }
 
 private:
@@ -69,7 +114,12 @@ private:
     rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr hopper_ctrl;
 
 private:
+    rclcpp::Publisher<custom_types::msg::TalonInfo>::SharedPtr hopper_info;
+
+private:
     TalonSRX hopper_actuator{5, constants::INTERFACE};
+
+    rclcpp::TimerBase::SharedPtr info_timer;
 };
 
 int main(int argc, char ** argv)
