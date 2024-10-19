@@ -5,15 +5,15 @@
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="dylanbooth06@gmail.com">db-dual</maintainer>
-  <license>TODO: License declaration</license>
-
+  <license>Apache 2.0</license> 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <build_depend>custom_types</build_depend>
-  <build_depend>std_msgs</build_depend>
-
+  <!-- Dependencies -->
+  <depend>custom_types</depend>
+  <depend>std_msgs</depend>
   <depend>rclcpp</depend>
 
+  <!-- Testing dependencies -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
