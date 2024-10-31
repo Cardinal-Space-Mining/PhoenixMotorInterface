@@ -28,16 +28,19 @@ private:
             this->teleop_state.update(this->robot_state, this->joy);
         track_right_ctrl->publish(motor_settings.track_right);
         track_left_ctrl->publish(motor_settings.track_left);
+        hopper_ctrl->publish(motor_settings.hopper_actuator);
     }
 
     void display_info_actuator(const custom_types::msg::TalonInfo &msg) {
-        std::clog << "Motor Temp: \t" << msg.temperature << "\n"
+        std::clog
+                  << "Motor Temp: \t" << msg.temperature << "\n"
                   << "Motor Volt: \t" << msg.bus_voltage << "\n"
                   << "Output Percent: \t" << msg.output_percent << "\n"
                   << "Output Voltage: \t" << msg.output_voltage << "\n"
                   << "Output Current: \t" << msg.output_current << "\n"
                   << "Motor Position: \t" << msg.position << "\n"
-                  << "Motor Velocity: \t" << msg.velocity << std::flush;
+                  << "Motor Velocity: \t" << msg.velocity << "\n"
+        << std::flush;
     }
 
     std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> talon_ctrl_pub(rclcpp::Node &parent, const std::string &name) {
@@ -46,7 +49,7 @@ private:
 
     std::shared_ptr<rclcpp::Subscription<custom_types::msg::TalonInfo>> talon_info_sub(rclcpp::Node &parent, const std::string &name) {
         return parent.create_subscription<custom_types::msg::TalonInfo>(name, 10, [this](const custom_types::msg::TalonInfo &msg) 
-            { display_info_actuator(msg); });
+            { /*display_info_actuator(msg);*/ });
     }
 
 public:
