@@ -22,16 +22,16 @@ add_executable(main src/main.cpp)
 ament_target_dependencies(main rclcpp std_msgs custom_types)
 target_include_directories(main PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libs/phoenix5/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libs/Phoenix5-Linux-Example/include>
   $<INSTALL_INTERFACE:include>)
 target_compile_features(main PUBLIC c_std_99 cxx_std_20)  # Require C99 and C++20
 
 if (${CMAKE_LIBRARY_ARCHITECTURE} STREQUAL "arm-linux-gnueabihf") # Jetson TK1 / Pi
-    set(PHOENIX_LIBS_DIR ${CMAKE_SOURCE_DIR}/libs/phoenix5/lib/arm32)
+    set(PHOENIX_LIBS_DIR ${CMAKE_SOURCE_DIR}/libs/Phoenix5-Linux-Example/lib/arm32)
 elseif (${CMAKE_LIBRARY_ARCHITECTURE} STREQUAL "aarch64-linux-gnu") # Jetson TX2
-    set(PHOENIX_LIBS_DIR ${CMAKE_SOURCE_DIR}/libs/phoenix5/lib/arm64)
+    set(PHOENIX_LIBS_DIR ${CMAKE_SOURCE_DIR}/libs/Phoenix5-Linux-Example/lib/arm64)
 else()
-    set(PHOENIX_LIBS_DIR ${CMAKE_SOURCE_DIR}/libs/phoenix5/lib/x86-64)
+    set(PHOENIX_LIBS_DIR ${CMAKE_SOURCE_DIR}/libs/Phoenix5-Linux-Example/lib/x86-64)
 endif()
 
 
