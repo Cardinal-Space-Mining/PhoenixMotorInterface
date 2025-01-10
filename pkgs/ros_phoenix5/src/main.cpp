@@ -94,20 +94,20 @@ private:
 
     custom_types::msg::TalonInfo get_info(TalonSRX &motor) {
         custom_types::msg::TalonInfo info;
-        // info.temperature    = motor.GetTemperature();
-        // info.bus_voltage    = motor.GetBusVoltage();
-        // info.output_percent = motor.GetMotorOutputPercent();
-        // info.output_voltage = motor.GetMotorOutputVoltage();
-        // info.output_current = motor.GetOutputCurrent();
-        // info.position       = motor.GetSelectedSensorPosition();
-        // info.velocity       = motor.GetSelectedSensorVelocity();
-        info.temperature = 0;
-        info.bus_voltage = 0;
-        info.output_percent = 0;
-        info.output_voltage = 0;
-        info.output_current = 0;
-        info.position = 0;
-        info.velocity = 0;
+        info.temperature    = motor.GetTemperature();
+        info.bus_voltage    = motor.GetBusVoltage();
+        info.output_percent = motor.GetMotorOutputPercent();
+        info.output_voltage = motor.GetMotorOutputVoltage();
+        info.output_current = motor.GetOutputCurrent();
+        info.position       = motor.GetSelectedSensorPosition();
+        info.velocity       = motor.GetSelectedSensorVelocity();
+        // info.temperature = 0;
+        // info.bus_voltage = 0;
+        // info.output_percent = 0;
+        // info.output_voltage = 0;
+        // info.output_current = 0;
+        // info.position = 0;
+        // info.velocity = 0;
 
         return info;
     }
