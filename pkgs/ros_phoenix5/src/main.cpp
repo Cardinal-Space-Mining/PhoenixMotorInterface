@@ -12,6 +12,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/int32.hpp>
+#include <std_msgs/msg/int8.hpp>
 
 #define Phoenix_No_WPI // remove WPI dependencies
 #include "ctre/Phoenix.h"
@@ -35,8 +36,13 @@ enum class BrakeMode : uint8_t {
     BRAKE = 1
 };
 
-namespace constants
-{
+enum class RobotStatus : int8_t {
+    TELEOP   = 0,
+    DISABLED = 1,
+    AUTONOMY = 2
+};
+
+namespace constants {
 static const std::string INTERFACE = "can0";
 static constexpr Gains DEFAULT_GAINS{0.0, 0.0, 0.0, 0.2};
 static constexpr Gains DefaultRobotGains{
@@ -47,21 +53,28 @@ static constexpr Gains DefaultRobotGains{
 };
 } // namespace constants
 
-class Robot : public rclcpp::Node
-{
+class Robot : public rclcpp::Node {
 public:
     Robot()
     : rclcpp::Node("robot_phoenix5")
     , heartbeat_sub(this->create_subscription<std_msgs::msg::Int32>(
           "heartbeat", 10, [](const std_msgs::msg::Int32 & msg)
           { ctre::phoenix::unmanaged::Unmanaged::FeedEnable(msg.data); }))
-    , info_timer(
-        this->create_wall_timer(100ms, [this]() { this->info_periodic(); }))
-    , hopper_ctrl(this->create_subscription<custom_types::msg::TalonCtrl>(
-        "hopper_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg)
+    , hopper_ctrl_teleop(this->create_subscription<custom_types::msg::TalonCtrl>(
+        "hopper_ctrl_teleop", 10, [this](const custom_types::msg::TalonCtrl &msg)
+        { execute_ctrl(this->hopper_actuator, msg); }))
+    , hopper_ctrl_auto(this->create_subscription<custom_types::msg::TalonCtrl>(
+        "hopper_ctrl_auto", 10, [this](const custom_types::msg::TalonCtrl &msg)
         { execute_ctrl(this->hopper_actuator, msg); }))
     , hopper_info(this->create_publisher<custom_types::msg::TalonInfo>(
         "hopper_info", 10))
+    // robot status (teleop, disabled, autonomy)
+    , robot_status(RobotStatus::DISABLED)
+    , robot_status_sub(this->create_subscription<std_msgs::msg::Int8>(
+        "robot_status", 10, [this](const std_msgs::msg::Int8 &msg)
+        { update_status(msg); }))
+    , info_timer(
+        this->create_wall_timer(100ms, [this]() { this->info_periodic(); }))
     {
 
         config(hopper_actuator, constants::DEFAULT_GAINS, BrakeMode::BRAKE);
@@ -89,7 +102,11 @@ private:
     }
 
     void execute_ctrl(TalonSRX &motor, const custom_types::msg::TalonCtrl &msg) {
-        motor.Set(static_cast<ctre::phoenix::motorcontrol::ControlMode>(msg.mode), msg.value);
+        if (robot_status == RobotStatus::TELEOP) {
+            motor.Set(static_cast<ctre::phoenix::motorcontrol::ControlMode>(msg.mode), msg.value);
+        } else if (robot_status == RobotStatus::AUTONOMY) {
+
+        }
     }
 
     custom_types::msg::TalonInfo get_info(TalonSRX &motor) {
@@ -116,9 +133,27 @@ private:
         hopper_info->publish(get_info(hopper_actuator));
     }
 
+    void update_status(const std_msgs::msg::Int8 &msg) {
+        switch (msg.data) {
+        case 0:
+            robot_status = RobotStatus::TELEOP;
+            break;
+        case 1:
+            robot_status = RobotStatus::DISABLED;
+            break;
+        case 2:
+            robot_status = RobotStatus::AUTONOMY;
+            break;
+        default:
+            robot_status = RobotStatus::DISABLED;
+            break;
+        }
+    }
+
 private:
-    std::shared_ptr<rclcpp::Subscription<std_msgs::msg::Int32>> heartbeat_sub;
-    rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr hopper_ctrl;
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr heartbeat_sub;
+    rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr hopper_ctrl_teleop;
+    rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr hopper_ctrl_auto;
 
 private:
     rclcpp::Publisher<custom_types::msg::TalonInfo>::SharedPtr hopper_info;
@@ -126,7 +161,13 @@ private:
 private:
     TalonSRX hopper_actuator{4, constants::INTERFACE};
 
+private:
+    RobotStatus robot_status;
+    rclcpp::Subscription<std_msgs::msg::Int8>::SharedPtr robot_status_sub;
+
+private:
     rclcpp::TimerBase::SharedPtr info_timer;
+
 };
 
 int main(int argc, char ** argv)
