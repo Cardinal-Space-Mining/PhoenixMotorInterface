@@ -49,19 +49,21 @@ private:
 
     std::shared_ptr<rclcpp::Subscription<custom_types::msg::TalonInfo>> talon_info_sub(rclcpp::Node &parent, const std::string &name) {
         return parent.create_subscription<custom_types::msg::TalonInfo>(name, 10, [this](const custom_types::msg::TalonInfo &msg) 
-            { /*display_info_actuator(msg);*/ });
+            { display_info_actuator(msg); });
     }
 
 public:
     RobotTeleopInterface(rclcpp::Node &parent) : 
         joy_sub(parent.create_subscription<sensor_msgs::msg::Joy>(
             "joy", 10, [this](const sensor_msgs::msg::Joy &joy) { this->joy = joy; }))
+        // Motor Information subscribers
+        , hopper_info(talon_info_sub(parent, "hopper_info"))
+        // Motor Teleop Control Publishers
         , track_right_ctrl(talon_ctrl_pub(parent, "track_right_ctrl"))
         , track_left_ctrl(talon_ctrl_pub(parent, "track_left_ctrl"))
-        , hopper_ctrl(talon_ctrl_pub(parent, "hopper_ctrl"))
+        , hopper_ctrl(talon_ctrl_pub(parent, "hopper_ctrl_teleop"))
         , teleop_update_timer(
             parent.create_wall_timer(100ms, [this]() { this->update_motors(); }))
-        , hopper_info(talon_info_sub(parent, "hopper_info"))
         {
         }
 
@@ -87,7 +89,7 @@ class Controller : public rclcpp::Node
 {
 public:
     Controller() : Node("controller_node")
-    , heartbeat(create_publisher<std_msgs::msg::Int32>("heartbeat", 10))
+    , teleop_interface(*this)
     , heartbeat_timer(this->create_wall_timer(100ms,
         [this]()
         {
@@ -98,7 +100,7 @@ public:
                 this->heartbeat->publish(msg);
             }
         }))
-    , teleop_interface(*this)
+    , heartbeat(create_publisher<std_msgs::msg::Int32>("heartbeat", 10))
     {
 
         std::cout << "robot init" << std::endl;
