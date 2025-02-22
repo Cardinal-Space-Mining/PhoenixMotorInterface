@@ -29,18 +29,22 @@ namespace constants {
 class Robot : public rclcpp::Node {
 public:
     Robot() : Node("robot") {
-        setup_subscriptions();
+        setup();
         setup_motors();
         RCLCPP_DEBUG(this->get_logger(), "Initialized Node");
     }
 
 private:
     // Function to setup subscriptions for the robot
-    void setup_subscriptions() {
-        heartbeat_sub = this->create_subscription<std_msgs::msg::Int32>(
-            "heartbeat", 10, [](const std_msgs::msg::Int32 &msg) {
-                ctre::phoenix::unmanaged::FeedEnable(msg.data);
-            });
+    void setup() {
+        track_right_info = this->create_publisher<custom_types::msg::TalonInfo>(
+            "track_right_info", 10);
+        track_left_info = this->create_publisher<custom_types::msg::TalonInfo>(
+            "track_left_info", 10);
+        trencher_info = this->create_publisher<custom_types::msg::TalonInfo>(
+            "trencher_info", 10);
+        hopper_info = this->create_publisher<custom_types::msg::TalonInfo>(
+            "hopper_belt_info", 10);
 
         track_right_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
             "track_right_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg) {
@@ -52,15 +56,26 @@ private:
                 execute_ctrl(this->track_left, msg);
             });
 
+        trencher_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
+            "trencher_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg) {
+                execute_ctrl(this->trencher, msg);
+            });
+
+        hopper_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
+            "hopper_belt_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg) {
+                execute_ctrl(this->hopper, msg);
+            });
+
+        heartbeat_sub = this->create_subscription<std_msgs::msg::Int32>(
+            "heartbeat", 10, [](const std_msgs::msg::Int32 &msg) {
+                ctre::phoenix::unmanaged::FeedEnable(msg.data);
+            });
+
         info_timer = this->create_wall_timer(100ms, [this]() { this->info_periodic(); });
     }
 
     // Function to setup motors for the robot
     void setup_motors() {
-        std::array<std::reference_wrapper<TalonFX>, 2> motors = {
-            {track_right, track_left}
-        };
-
         for (auto &motor : motors) {
             config_talonfx(motor, constants::kP, constants::kI, constants::kD, constants::kV);
         }
@@ -86,34 +101,88 @@ private:
 
     // Periodic function for motor information updates
     void info_periodic() {
-        // Retrieve the velocity values directly using GetValue()
-        auto right_velocity_status = track_right.GetVelocity().GetValue();
-        auto left_velocity_status = track_left.GetVelocity().GetValue();
+        // // Retrieve the velocity values directly using GetValue()
+        // auto right_velocity_status = track_right.GetVelocity().GetValue();
+        // auto left_velocity_status = track_left.GetVelocity().GetValue();
 
-        // Check if the status signal is valid before using it
-        if (right_velocity_status) {
-            double right_velocity = right_velocity_status.value();
-            RCLCPP_INFO(this->get_logger(), "Right motor velocity: %f", right_velocity);
-        } else {
-            RCLCPP_WARN(this->get_logger(), "Failed to retrieve right motor velocity.");
-        }
+        // // Check if the status signal is valid before using it
+        // if (right_velocity_status) {
+        //     double right_velocity = right_velocity_status.value();
+        //     RCLCPP_INFO(this->get_logger(), "Right motor velocity: %f", right_velocity);
+        // } else {
+        //     RCLCPP_WARN(this->get_logger(), "Failed to retrieve right motor velocity.");
+        // }
 
-        if (left_velocity_status) {
-            double left_velocity = left_velocity_status.value();
-            RCLCPP_INFO(this->get_logger(), "Left motor velocity: %f", left_velocity);
-        } else {
-            RCLCPP_WARN(this->get_logger(), "Failed to retrieve left motor velocity.");
-        }
+        // if (left_velocity_status) {
+        //     double left_velocity = left_velocity_status.value();
+        //     RCLCPP_INFO(this->get_logger(), "Left motor velocity: %f", left_velocity);
+        // } else {
+        //     RCLCPP_WARN(this->get_logger(), "Failed to retrieve left motor velocity.");
+        // }
+        auto msg = custom_types::msg::TalonInfo();
+
+        // Track Right motor
+        msg.temperature     = track_right.GetDeviceTemp().GetValueAsDouble();
+        msg.bus_voltage     = track_right.GetSupplyVoltage().GetValueAsDouble();
+        msg.output_percent  = track_right.GetMotorOutputStatus().GetValueAsDouble();
+        msg.output_voltage  = track_right.GetMotorVoltage().GetValueAsDouble();
+        msg.output_current  = track_right.GetSupplyCurrent().GetValueAsDouble();
+        msg.velocity        = track_right.GetVelocity().GetValueAsDouble();
+        msg.position        = track_right.GetPosition().GetValueAsDouble();
+        track_right_info->publish(msg);
+
+        // Track Left motor
+        msg.temperature     = track_left.GetDeviceTemp().GetValueAsDouble();
+        msg.bus_voltage     = track_left.GetSupplyVoltage().GetValueAsDouble();
+        msg.output_percent  = track_left.GetMotorOutputStatus().GetValueAsDouble();
+        msg.output_voltage  = track_left.GetMotorVoltage().GetValueAsDouble();
+        msg.output_current  = track_left.GetSupplyCurrent().GetValueAsDouble();
+        msg.velocity        = track_left.GetVelocity().GetValueAsDouble();
+        msg.position        = track_left.GetPosition().GetValueAsDouble();
+        track_left_info->publish(msg);
+
+        // Trencher
+        msg.temperature     = trencher.GetDeviceTemp().GetValueAsDouble();
+        msg.bus_voltage     = trencher.GetSupplyVoltage().GetValueAsDouble();
+        msg.output_percent  = trencher.GetMotorOutputStatus().GetValueAsDouble();
+        msg.output_voltage  = trencher.GetMotorVoltage().GetValueAsDouble();
+        msg.output_current  = trencher.GetSupplyCurrent().GetValueAsDouble();
+        msg.velocity        = trencher.GetVelocity().GetValueAsDouble();
+        msg.position        = trencher.GetPosition().GetValueAsDouble();
+        trencher_info->publish(msg);
+
+        // hopper
+        msg.temperature     = hopper.GetDeviceTemp().GetValueAsDouble();
+        msg.bus_voltage     = hopper.GetSupplyVoltage().GetValueAsDouble();
+        msg.output_percent  = hopper.GetMotorOutputStatus().GetValueAsDouble();
+        msg.output_voltage  = hopper.GetMotorVoltage().GetValueAsDouble();
+        msg.output_current  = hopper.GetSupplyCurrent().GetValueAsDouble();
+        msg.velocity        = hopper.GetVelocity().GetValueAsDouble();
+        msg.position        = hopper.GetPosition().GetValueAsDouble();
+        hopper_info->publish(msg);
     }
     
 private:
     TalonFX track_right{0, constants::INTERFACE};
-    TalonFX track_left{1, constants::INTERFACE};  
+    TalonFX track_left{1, constants::INTERFACE}; 
+    TalonFX trencher{2, constants::INTERFACE};
+    TalonFX hopper{3, constants::INTERFACE};
+
+    rclcpp::Publisher<custom_types::msg::TalonInfo>::SharedPtr track_right_info;
+    rclcpp::Publisher<custom_types::msg::TalonInfo>::SharedPtr track_left_info;
+    rclcpp::Publisher<custom_types::msg::TalonInfo>::SharedPtr trencher_info;
+    rclcpp::Publisher<custom_types::msg::TalonInfo>::SharedPtr hopper_info;
 
     rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr track_right_ctrl;
     rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr track_left_ctrl;
+    rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr trencher_ctrl;
+    rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr hopper_ctrl;
     std::shared_ptr<rclcpp::Subscription<std_msgs::msg::Int32>> heartbeat_sub;
     rclcpp::TimerBase::SharedPtr info_timer;
+
+    std::array<std::reference_wrapper<TalonFX>, 4> motors = {
+        {track_right, track_left, trencher, hopper}
+    };
 };
 
 int main(int argc, char **argv) {
