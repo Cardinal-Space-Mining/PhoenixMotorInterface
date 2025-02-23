@@ -5,6 +5,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/int32.hpp>
+#include <std_msgs/msg/int8.hpp>
 
 // CTRE and custom types
 #define Phoenix_No_WPI // remove WPI dependencies
@@ -17,6 +18,12 @@ using namespace ctre::phoenix6;
 using namespace std::chrono_literals;
 
 using TalonFX = ctre::phoenix6::hardware::TalonFX;
+
+enum class RobotStatus : int8_t {
+    TELEOP   = 0,
+    DISABLED = 1,
+    AUTONOMY = 2
+};
 
 namespace constants {
     static const std::string INTERFACE = "can0";
@@ -71,6 +78,11 @@ private:
                 ctre::phoenix::unmanaged::FeedEnable(msg.data);
             });
 
+        robot_status_sub = this->create_subscription<std_msgs::msg::Int8>(
+            "robot_status", 10, [this](const std_msgs::msg::Int8 &msg) {
+                update_status(msg);
+            });
+
         info_timer = this->create_wall_timer(100ms, [this]() { this->info_periodic(); });
     }
 
@@ -96,6 +108,8 @@ private:
 
     // Function to execute control commands on a motor
     void execute_ctrl(TalonFX &motor, const custom_types::msg::TalonCtrl &msg) {
+        if (robot_status == RobotStatus::DISABLED) return;
+        
         motor.SetControl(controls::DutyCycleOut(msg.value));
     }
 
@@ -161,6 +175,23 @@ private:
         msg.position        = hopper.GetPosition().GetValueAsDouble();
         hopper_info->publish(msg);
     }
+
+    void update_status(const std_msgs::msg::Int8 &msg) {
+        switch (msg.data) {
+        case 0:
+            robot_status = RobotStatus::TELEOP;
+            break;
+        case 1:
+            robot_status = RobotStatus::DISABLED;
+            break;
+        case 2:
+            robot_status = RobotStatus::AUTONOMY;
+            break;
+        default:
+            robot_status = RobotStatus::DISABLED;
+            break;
+        }
+    }
     
 private:
     TalonFX track_right{0, constants::INTERFACE};
@@ -178,11 +209,14 @@ private:
     rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr trencher_ctrl;
     rclcpp::Subscription<custom_types::msg::TalonCtrl>::SharedPtr hopper_ctrl;
     std::shared_ptr<rclcpp::Subscription<std_msgs::msg::Int32>> heartbeat_sub;
+    rclcpp::Subscription<std_msgs::msg::Int8>::SharedPtr robot_status_sub;
     rclcpp::TimerBase::SharedPtr info_timer;
 
     std::array<std::reference_wrapper<TalonFX>, 4> motors = {
         {track_right, track_left, trencher, hopper}
     };
+
+    RobotStatus robot_status;
 };
 
 int main(int argc, char **argv) {
