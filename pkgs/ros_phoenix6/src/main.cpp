@@ -84,27 +84,49 @@ private:
             });
 
         info_timer = this->create_wall_timer(100ms, [this]() { this->info_periodic(); });
+
+        config_motors_sub = this->create_subscription<std_msgs::msg::Int8>(
+            "config_motors", 10, [this](const std_msgs::msg::Int8 &msg) {
+                setup_motors();
+            });
     }
 
     // Function to setup motors for the robot
     void setup_motors() {
-        for (auto &motor : motors) {
-            config_talonfx(motor, constants::kP, constants::kI, constants::kD, constants::kV);
-        }
-    }
+        // for (auto &motor : motors) {
+        //     config_talonfx(motor, constants::kP, constants::kI, constants::kD, constants::kV);
+        // }
 
-    // Function to configure a TalonFX motor with PID and other settings
-    void config_talonfx(TalonFX &motor, double kP, double kI, double kD, double kV) {
-        configs::TalonFXConfiguration config;
-        config.Slot0.kP = kP;
-        config.Slot0.kI = kI;
-        config.Slot0.kD = kD;
-        config.Slot0.kV = kV;
+        configs::TalonFXConfiguration config{};
+        config.Slot0.kP = constants::kP;
+        config.Slot0.kI = constants::kI;
+        config.Slot0.kD = constants::kD;
+        config.Slot0.kV = constants::kV;
         config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Brake;
         config.CurrentLimits.StatorCurrentLimitEnable = true;
 
-        motor.GetConfigurator().Apply(config);
+        trencher.GetConfigurator().Apply(config);
+        hopper.GetConfigurator().Apply(config);
+
+        config.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
+        track_right.GetConfigurator().Apply(config);
+
+        config.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
+        track_left.GetConfigurator().Apply(config);
     }
+
+    // // Function to configure a TalonFX motor with PID and other settings
+    // void config_talonfx(TalonFX &motor, double kP, double kI, double kD, double kV) {
+    //     configs::TalonFXConfiguration config;
+    //     config.Slot0.kP = kP;
+    //     config.Slot0.kI = kI;
+    //     config.Slot0.kD = kD;
+    //     config.Slot0.kV = kV;
+    //     config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Brake;
+    //     config.CurrentLimits.StatorCurrentLimitEnable = true;
+
+    //     motor.GetConfigurator().Apply(config);
+    // }
 
     // Function to execute control commands on a motor
     void execute_ctrl(TalonFX &motor, const custom_types::msg::TalonCtrl &msg) {
@@ -217,6 +239,8 @@ private:
     };
 
     RobotStatus robot_status;
+
+    rclcpp::Subscription<std_msgs::msg::Int8>::SharedPtr config_motors_sub;
 };
 
 int main(int argc, char **argv) {
