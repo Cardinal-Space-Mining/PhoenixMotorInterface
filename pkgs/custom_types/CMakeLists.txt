@@ -8,11 +8,13 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
 
 # Generate the message files
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TalonCtrl.msg"
   "msg/TalonInfo.msg"
+  DEPENDENCIES std_msgs
 )
 
 # Ensure message files are installed

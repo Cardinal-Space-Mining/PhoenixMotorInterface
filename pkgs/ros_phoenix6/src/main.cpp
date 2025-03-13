@@ -93,9 +93,6 @@ private:
 
     // Function to setup motors for the robot
     void setup_motors() {
-        // for (auto &motor : motors) {
-        //     config_talonfx(motor, constants::kP, constants::kI, constants::kD, constants::kV);
-        // }
 
         configs::TalonFXConfiguration config{};
         config.Slot0.kP = constants::kP;
@@ -113,49 +110,29 @@ private:
 
         config.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
         track_left.GetConfigurator().Apply(config);
+
+        RCLCPP_INFO(this->get_logger(), "\nConfiguring Motors\n");
     }
-
-    // // Function to configure a TalonFX motor with PID and other settings
-    // void config_talonfx(TalonFX &motor, double kP, double kI, double kD, double kV) {
-    //     configs::TalonFXConfiguration config;
-    //     config.Slot0.kP = kP;
-    //     config.Slot0.kI = kI;
-    //     config.Slot0.kD = kD;
-    //     config.Slot0.kV = kV;
-    //     config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Brake;
-    //     config.CurrentLimits.StatorCurrentLimitEnable = true;
-
-    //     motor.GetConfigurator().Apply(config);
-    // }
 
     // Function to execute control commands on a motor
     void execute_ctrl(TalonFX &motor, const custom_types::msg::TalonCtrl &msg) {
-        if (robot_status == RobotStatus::DISABLED) return;
-        
-        motor.SetControl(controls::DutyCycleOut(msg.value));
+        if (robot_status == RobotStatus::DISABLED) {
+            motor.SetControl(controls::NeutralOut());
+            return;
+        }
+
+        if (msg.value < 0.1) {
+            motor.SetControl(controls::NeutralOut());
+        } else {
+            motor.SetControl(controls::DutyCycleOut(msg.value));
+        }     
     }
 
     // Periodic function for motor information updates
     void info_periodic() {
-        // // Retrieve the velocity values directly using GetValue()
-        // auto right_velocity_status = track_right.GetVelocity().GetValue();
-        // auto left_velocity_status = track_left.GetVelocity().GetValue();
-
-        // // Check if the status signal is valid before using it
-        // if (right_velocity_status) {
-        //     double right_velocity = right_velocity_status.value();
-        //     RCLCPP_INFO(this->get_logger(), "Right motor velocity: %f", right_velocity);
-        // } else {
-        //     RCLCPP_WARN(this->get_logger(), "Failed to retrieve right motor velocity.");
-        // }
-
-        // if (left_velocity_status) {
-        //     double left_velocity = left_velocity_status.value();
-        //     RCLCPP_INFO(this->get_logger(), "Left motor velocity: %f", left_velocity);
-        // } else {
-        //     RCLCPP_WARN(this->get_logger(), "Failed to retrieve left motor velocity.");
-        // }
         auto msg = custom_types::msg::TalonInfo();
+
+        msg.header.stamp = this->get_clock()->now();
 
         // Track Right motor
         msg.temperature     = track_right.GetDeviceTemp().GetValueAsDouble();
