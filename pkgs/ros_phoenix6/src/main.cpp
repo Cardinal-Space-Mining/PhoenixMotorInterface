@@ -17,6 +17,7 @@
 using namespace ctre::phoenix6;
 using namespace std::chrono_literals;
 
+using TalonInfo = custom_types::msg::TalonInfo;
 using TalonFX = ctre::phoenix6::hardware::TalonFX;
 
 enum class RobotStatus : int8_t {
@@ -35,7 +36,24 @@ namespace constants {
 
 class Robot : public rclcpp::Node {
 public:
-    Robot() : Node("robot") {
+    Robot() : Node("robot")
+    // motor info publishers
+    ,
+    track_right_info(this->create_publisher<TalonInfo>(
+        "track_right_info", 10))
+    ,
+    track_left_info(this->create_publisher<TalonInfo>(
+        "track_left_info", 10))
+    ,
+    trencher_info(this->create_publisher<TalonInfo>(
+        "trencher_info", 10))
+    ,
+    hopper_info(this->create_publisher<TalonInfo>(
+        "hopper_info", 10))
+    ,
+    info_timer(this->create_wall_timer(100ms, [this]()
+        { this->info_periodic(); }))
+    {
         setup();
         setup_motors();
         RCLCPP_DEBUG(this->get_logger(), "Initialized Node");
@@ -44,15 +62,6 @@ public:
 private:
     // Function to setup subscriptions for the robot
     void setup() {
-        track_right_info = this->create_publisher<custom_types::msg::TalonInfo>(
-            "track_right_info", 10);
-        track_left_info = this->create_publisher<custom_types::msg::TalonInfo>(
-            "track_left_info", 10);
-        trencher_info = this->create_publisher<custom_types::msg::TalonInfo>(
-            "trencher_info", 10);
-        hopper_info = this->create_publisher<custom_types::msg::TalonInfo>(
-            "hopper_belt_info", 10);
-
         track_right_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
             "track_right_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg) {
                 execute_ctrl(this->track_right, msg);
@@ -83,8 +92,6 @@ private:
                 update_status(msg);
             });
 
-        info_timer = this->create_wall_timer(100ms, [this]() { this->info_periodic(); });
-
         config_motors_sub = this->create_subscription<std_msgs::msg::Int8>(
             "config_motors", 10, [this](const std_msgs::msg::Int8 &msg) {
                 setup_motors();
@@ -111,6 +118,11 @@ private:
         config.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
         track_left.GetConfigurator().Apply(config);
 
+        track_right.SetControl(controls::NeutralOut());
+        track_left.SetControl(controls::NeutralOut());
+        trencher.SetControl(controls::NeutralOut());
+        hopper.SetControl(controls::NeutralOut());
+
         RCLCPP_INFO(this->get_logger(), "\nConfiguring Motors\n");
     }
 
@@ -125,12 +137,12 @@ private:
             motor.SetControl(controls::NeutralOut());
         } else {
             motor.SetControl(controls::DutyCycleOut(msg.value));
-        }     
+        }
     }
 
     // Periodic function for motor information updates
     void info_periodic() {
-        auto msg = custom_types::msg::TalonInfo();
+        auto msg = TalonInfo();
 
         msg.header.stamp = this->get_clock()->now();
 
@@ -191,10 +203,10 @@ private:
             break;
         }
     }
-    
+
 private:
     TalonFX track_right{0, constants::INTERFACE};
-    TalonFX track_left{1, constants::INTERFACE}; 
+    TalonFX track_left{1, constants::INTERFACE};
     TalonFX trencher{2, constants::INTERFACE};
     TalonFX hopper{3, constants::INTERFACE};
 
