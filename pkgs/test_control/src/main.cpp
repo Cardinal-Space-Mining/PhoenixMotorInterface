@@ -28,6 +28,7 @@ private:
             this->teleop_state.update(this->robot_state, this->joy);
         track_right_ctrl->publish(motor_settings.track_right);
         track_left_ctrl->publish(motor_settings.track_left);
+        trencher_ctrl->publish(motor_settings.trencher);
         hopper_ctrl->publish(motor_settings.hopper_actuator);
     }
 
@@ -61,7 +62,8 @@ public:
         // Motor Teleop Control Publishers
         , track_right_ctrl(talon_ctrl_pub(parent, "track_right_ctrl"))
         , track_left_ctrl(talon_ctrl_pub(parent, "track_left_ctrl"))
-        , hopper_ctrl(talon_ctrl_pub(parent, "hopper_ctrl_teleop"))
+        , trencher_ctrl(talon_ctrl_pub(parent, "trencher_ctrl"))
+        , hopper_ctrl(talon_ctrl_pub(parent, "hopper_belt_ctrl"))
         , teleop_update_timer(
             parent.create_wall_timer(100ms, [this]() { this->update_motors(); }))
         {
@@ -74,6 +76,7 @@ private:
 
     std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> track_right_ctrl;
     std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> track_left_ctrl;
+    std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> trencher_ctrl;
     std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> hopper_ctrl;
 
 private:
@@ -93,12 +96,10 @@ public:
     , heartbeat_timer(this->create_wall_timer(100ms,
         [this]()
         {
-            if(this->bot_enabled) {
                 std_msgs::msg::Int32 msg;
                 msg.data =
                     ENABLE_TIME.count();
                 this->heartbeat->publish(msg);
-            }
         }))
     , heartbeat(create_publisher<std_msgs::msg::Int32>("heartbeat", 10))
     {
@@ -120,7 +121,6 @@ private:
 
 private:
 
-    bool bot_enabled = true;
     static constexpr auto ENABLE_TIME = 250ms;
 
     rclcpp::TimerBase::SharedPtr timer_;
