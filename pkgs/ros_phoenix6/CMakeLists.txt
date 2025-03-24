@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(ros_phoenix6)
+project(robot_phoenix6)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,9 +7,16 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(custom_types REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(phoenix6 REQUIRED)
+
+add_executable(main src/main.cpp)
+ament_target_dependencies(main rclcpp std_msgs custom_types phoenix6)
+
+install(TARGETS main
+  DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
