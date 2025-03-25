@@ -153,7 +153,7 @@ TeleopStateMachine::normal_state(const RobotState & state,
 
         // Hopper Belt
         {
-            double trigger_percentage =
+            double trigger_percentage = 1.0 -
                 (ctrl.axes[LogitechMapping::Axes::L_TRIGGER] + 1.0) / 2.0;
             if(ctrl.buttons[LogitechMapping::Buttons::LB])
             {
@@ -167,7 +167,7 @@ TeleopStateMachine::normal_state(const RobotState & state,
 
         // Trencher Speed
         {
-            double trigger_percentage =
+            double trigger_percentage = 1.0 - 
                 (ctrl.axes[LogitechMapping::Axes::R_TRIGGER] + 1.0) / 2.0;
 
             if(ctrl.buttons[LogitechMapping::Buttons::RB])

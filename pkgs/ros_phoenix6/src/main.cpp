@@ -94,6 +94,7 @@ private:
 
         config_motors_sub = this->create_subscription<std_msgs::msg::Int8>(
             "config_motors", 10, [this](const std_msgs::msg::Int8 &msg) {
+                RCLCPP_INFO(this->get_logger(), "%d. Applying motor configs", msg.data);
                 setup_motors();
             });
     }
@@ -109,7 +110,10 @@ private:
         config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Brake;
         config.CurrentLimits.StatorCurrentLimitEnable = true;
 
+        config.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
         trencher.GetConfigurator().Apply(config);
+
+        config.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
         hopper.GetConfigurator().Apply(config);
 
         config.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
@@ -133,7 +137,7 @@ private:
             return;
         }
 
-        if (msg.value < 0.1) {
+        if (abs(msg.value) < 0.1 ) {
             motor.SetControl(controls::NeutralOut());
         } else {
             motor.SetControl(controls::DutyCycleOut(msg.value));

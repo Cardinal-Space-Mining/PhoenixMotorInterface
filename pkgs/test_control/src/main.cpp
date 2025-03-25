@@ -25,7 +25,7 @@ class RobotTeleopInterface {
 private:
     void update_motors() {
         MotorSettings motor_settings =
-            this->teleop_state.update(this->robot_state, this->joy);
+        this->teleop_state.update(this->robot_state, this->joy);
         track_right_ctrl->publish(motor_settings.track_right);
         track_left_ctrl->publish(motor_settings.track_left);
         trencher_ctrl->publish(motor_settings.trencher);
@@ -58,8 +58,8 @@ public:
         joy_sub(parent.create_subscription<sensor_msgs::msg::Joy>(
             "joy", 10, [this](const sensor_msgs::msg::Joy &joy) { this->joy = joy; }))
         // Motor Information subscribers
-        , hopper_info(talon_info_sub(parent, "hopper_info"))
-        // Motor Teleop Control Publishers
+        // , hopper_info(talon_info_sub(parent, "hopper_info"))
+        // // Motor Teleop Control Publishers
         , track_right_ctrl(talon_ctrl_pub(parent, "track_right_ctrl"))
         , track_left_ctrl(talon_ctrl_pub(parent, "track_left_ctrl"))
         , trencher_ctrl(talon_ctrl_pub(parent, "trencher_ctrl"))
