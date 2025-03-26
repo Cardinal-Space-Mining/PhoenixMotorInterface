@@ -49,7 +49,7 @@ public:
         "trencher_info", 10))
     ,
     hopper_info(this->create_publisher<TalonInfo>(
-        "hopper_info", 10))
+        "hopper_belt_info", 10))
     ,
     info_timer(this->create_wall_timer(100ms, [this]()
         { this->info_periodic(); }))
@@ -108,7 +108,7 @@ private:
         config.Slot0.kD = constants::kD;
         config.Slot0.kV = constants::kV;
         config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Brake;
-        config.CurrentLimits.StatorCurrentLimitEnable = true;
+        config.CurrentLimits.StatorCurrentLimitEnable = false;
 
         config.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
         trencher.GetConfigurator().Apply(config);
