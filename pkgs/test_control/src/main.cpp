@@ -29,7 +29,8 @@ private:
         track_right_ctrl->publish(motor_settings.track_right);
         track_left_ctrl->publish(motor_settings.track_left);
         trencher_ctrl->publish(motor_settings.trencher);
-        hopper_ctrl->publish(motor_settings.hopper_actuator);
+        hopper_ctrl->publish(motor_settings.hopper_belt);
+        hopper_act_ctrl->publish(motor_settings.hopper_actuator);
     }
 
     void display_info_actuator(const custom_types::msg::TalonInfo &msg) {
@@ -64,6 +65,7 @@ public:
         , track_left_ctrl(talon_ctrl_pub(parent, "track_left_ctrl"))
         , trencher_ctrl(talon_ctrl_pub(parent, "trencher_ctrl"))
         , hopper_ctrl(talon_ctrl_pub(parent, "hopper_belt_ctrl"))
+        , hopper_act_ctrl(talon_ctrl_pub(parent, "hopper_ctrl_teleop"))
         , teleop_update_timer(
             parent.create_wall_timer(100ms, [this]() { this->update_motors(); }))
         {
@@ -78,6 +80,7 @@ private:
     std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> track_left_ctrl;
     std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> trencher_ctrl;
     std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> hopper_ctrl;
+    std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> hopper_act_ctrl;
 
 private:
     sensor_msgs::msg::Joy joy;
