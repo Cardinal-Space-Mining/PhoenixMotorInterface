@@ -102,8 +102,8 @@ private:
     }
 
     void execute_ctrl(TalonSRX &motor, const custom_types::msg::TalonCtrl &msg) {
-        RCLCPP_INFO(this->get_logger(), "Motor mode: %d, with output: %f", msg.mode, msg.value);
-
+        RCLCPP_INFO(this->get_logger(), "Motor output: %f", msg.value);
+        // RCLCPP_DEBUG(this->get_logger(), "msg: %s", msg);
         if (robot_status == RobotStatus::TELEOP || robot_status == RobotStatus::AUTONOMY) {
             motor.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, msg.value);
         } else {
