@@ -5,12 +5,13 @@
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="dylanbooth06@gmail.com">db-dual</maintainer>
-  <license>Apache 2.0</license> 
+  <license>Apache 2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <!-- Dependencies -->
   <depend>custom_types</depend>
   <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
   <depend>rclcpp</depend>
 
   <!-- Testing dependencies -->

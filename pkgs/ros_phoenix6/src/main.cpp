@@ -195,12 +195,50 @@ private:
         switch (msg.data) {
         case 0:
             robot_status = RobotStatus::TELEOP;
+            track_right_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
+                "track_right_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg) {
+                execute_ctrl(this->track_right, msg);
+                });
+
+            track_left_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
+                "track_left_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg) {
+                execute_ctrl(this->track_left, msg);
+                });
+
+            trencher_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
+                "trencher_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg) {
+                execute_ctrl(this->trencher, msg);
+                });
+
+            hopper_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
+                "hopper_belt_ctrl", 10, [this](const custom_types::msg::TalonCtrl &msg) {
+                execute_ctrl(this->hopper, msg);
+                });
             break;
         case 1:
             robot_status = RobotStatus::DISABLED;
             break;
         case 2:
             robot_status = RobotStatus::AUTONOMY;
+            track_right_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
+                "track_right_ctrl_auto", 10, [this](const custom_types::msg::TalonCtrl& msg)
+                { execute_ctrl(this->track_right, msg); }
+            );
+
+            track_left_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
+                "track_left_ctrl_auto", 10, [this](const custom_types::msg::TalonCtrl& msg)
+                { execute_ctrl(this->track_left, msg); }
+            );
+
+            trencher_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
+                "trencher_ctrl_auto", 10, [this](const custom_types::msg::TalonCtrl& msg)
+                { execute_ctrl(this->trencher, msg); }
+            );
+
+            hopper_ctrl = this->create_subscription<custom_types::msg::TalonCtrl>(
+                "hopper_ctrl_auto", 10, [this](const custom_types::msg::TalonCtrl &msg)
+                { execute_ctrl(this->hopper, msg); }
+            );
             break;
         default:
             robot_status = RobotStatus::DISABLED;

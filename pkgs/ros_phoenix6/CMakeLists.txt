@@ -10,10 +10,13 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(custom_types REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(phoenix6 REQUIRED)
 
 add_executable(main src/main.cpp)
+add_executable(twist src/twist-talon.cpp)
 ament_target_dependencies(main rclcpp std_msgs custom_types phoenix6)
+ament_target_dependencies(twist rclcpp geometry_msgs custom_types)
 
 install(TARGETS main
   DESTINATION lib/${PROJECT_NAME})
