@@ -10,8 +10,8 @@
 #include "test_control/logitech_map.hpp"
 #include "test_control/states.hpp"
 
-#include "custom_types/msg/talon_ctrl.hpp"
-#include "custom_types/msg/talon_info.hpp"
+#include "talon_msgs/msg/talon_ctrl.hpp"
+#include "talon_msgs/msg/talon_info.hpp"
 
 enum class ControlMode {
     DISABLED,
@@ -33,7 +33,7 @@ private:
         hopper_act_ctrl->publish(motor_settings.hopper_actuator);
     }
 
-    void display_info_actuator(const custom_types::msg::TalonInfo &msg) {
+    void display_info_actuator(const talon_msgs::msg::TalonInfo &msg) {
         std::clog
                   << "Motor Temp: \t" << msg.temperature << "\n"
                   << "Motor Volt: \t" << msg.bus_voltage << "\n"
@@ -45,12 +45,12 @@ private:
         << std::flush;
     }
 
-    std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> talon_ctrl_pub(rclcpp::Node &parent, const std::string &name) {
-        return parent.create_publisher<custom_types::msg::TalonCtrl>(name, 10);
+    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> talon_ctrl_pub(rclcpp::Node &parent, const std::string &name) {
+        return parent.create_publisher<talon_msgs::msg::TalonCtrl>(name, 10);
     }
 
-    std::shared_ptr<rclcpp::Subscription<custom_types::msg::TalonInfo>> talon_info_sub(rclcpp::Node &parent, const std::string &name) {
-        return parent.create_subscription<custom_types::msg::TalonInfo>(name, 10, [this](const custom_types::msg::TalonInfo &msg) 
+    std::shared_ptr<rclcpp::Subscription<talon_msgs::msg::TalonInfo>> talon_info_sub(rclcpp::Node &parent, const std::string &name) {
+        return parent.create_subscription<talon_msgs::msg::TalonInfo>(name, 10, [this](const talon_msgs::msg::TalonInfo &msg) 
             { display_info_actuator(msg); });
     }
 
@@ -74,13 +74,13 @@ public:
 private:
     std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::Joy>> joy_sub;
 
-    rclcpp::Subscription<custom_types::msg::TalonInfo>::SharedPtr hopper_info;
+    rclcpp::Subscription<talon_msgs::msg::TalonInfo>::SharedPtr hopper_info;
 
-    std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> track_right_ctrl;
-    std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> track_left_ctrl;
-    std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> trencher_ctrl;
-    std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> hopper_ctrl;
-    std::shared_ptr<rclcpp::Publisher<custom_types::msg::TalonCtrl>> hopper_act_ctrl;
+    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> track_right_ctrl;
+    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> track_left_ctrl;
+    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> trencher_ctrl;
+    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> hopper_ctrl;
+    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> hopper_act_ctrl;
 
 private:
     sensor_msgs::msg::Joy joy;

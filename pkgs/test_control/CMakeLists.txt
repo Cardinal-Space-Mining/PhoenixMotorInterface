@@ -9,12 +9,12 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(custom_types REQUIRED)
+find_package(talon_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 
 add_executable(main src/main.cpp src/states.cpp)
 
-ament_target_dependencies(main rclcpp sensor_msgs std_msgs custom_types)
+ament_target_dependencies(main rclcpp sensor_msgs std_msgs talon_msgs)
 
 target_include_directories(main PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -25,6 +25,10 @@ target_compile_features(main PUBLIC c_std_99 cxx_std_20)
 install(TARGETS
     main
     DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY
+    launch
+    DESTINATION share/${PROJECT_NAME} )
 
 if(BUILD_TESTING)
     find_package(ament_lint_auto REQUIRED)

@@ -1,0 +1,6 @@
+1. Change control node to be robot-side:
+    A. move "heartbeat" to be inside of gui, or its own node in gui repo
+    B. merge auto/teleop motor command topics, remove robot state subscription from motor drivers
+    C. change motor command publisher behavior inside of control node based on robot state (instead of switching pubs in motor drivers)
+    D. need to handle heartbeat during auto (don't necessarily stop auto if we disconnect?)
+    E. [add autonomy plumbing -- motor status subs, topics for comms with perception node]
