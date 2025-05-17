@@ -7,11 +7,15 @@
 #include <std_msgs/msg/int32.hpp>
 #include <sensor_msgs/msg/joy.hpp>
 
-#include "test_control/logitech_map.hpp"
-#include "test_control/states.hpp"
+#include "teleop_control/logitech_map.hpp"
+#include "teleop_control/states.hpp"
 
 #include "talon_msgs/msg/talon_ctrl.hpp"
 #include "talon_msgs/msg/talon_info.hpp"
+
+#ifndef ENABLE_HEARTBEAT_PUB
+#define ENABLE_HEARTBEAT_PUB 0
+#endif
 
 enum class ControlMode {
     DISABLED,
@@ -96,6 +100,7 @@ class Controller : public rclcpp::Node
 public:
     Controller() : Node("controller_node")
     , teleop_interface(*this)
+    #if ENABLE_HEARTBEAT_PUB
     , heartbeat_timer(this->create_wall_timer(100ms,
         [this]()
         {
@@ -105,6 +110,7 @@ public:
                 this->heartbeat->publish(msg);
         }))
     , heartbeat(create_publisher<std_msgs::msg::Int32>("heartbeat", 10))
+    #endif
     {
 
         std::cout << "robot init" << std::endl;
@@ -119,8 +125,11 @@ private:
 
     sensor_msgs::msg::Joy joy;
     std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::Joy>> joy_sub;
+
+    #if ENABLE_HEARTBEAT_PUB
     rclcpp::TimerBase::SharedPtr heartbeat_timer;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr heartbeat;
+    #endif
 
 private:
 

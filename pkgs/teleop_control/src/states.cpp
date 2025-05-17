@@ -1,6 +1,6 @@
-#include "test_control/states.hpp"
-#include "test_control/logitech_map.hpp"
-#include "test_control/robot_constants.hpp"
+#include "teleop_control/states.hpp"
+#include "teleop_control/logitech_map.hpp"
+#include "teleop_control/robot_constants.hpp"
 
 #include <cmath>
 #include <numbers>
@@ -130,7 +130,7 @@ TeleopStateMachine::normal_state(const RobotState & state,
             auto vars = compute_track_scalars(
                 // -ctrl.axes[LogitechMapping::Axes::LEFTX], // commented out for test to fix left right issue
                 ctrl.axes[LogitechMapping::Axes::LEFTX],
-                ctrl.axes[LogitechMapping::Axes::LEFTY],
+                -ctrl.axes[LogitechMapping::Axes::LEFTY],
                 RobotConstants::DRIVING_MAGNITUDE_DEADZONE_SCALAR);
             bot.track_right.mode = bot.track_right.PERCENT_OUTPUT;
             bot.track_right.value =

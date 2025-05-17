@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>test_control</name>
+  <name>teleop_control</name>
   <version>1.0.0</version>
   <description>Motor control node</description>
   <maintainer email="dbooth05@iastate.edu">dbooth05</maintainer>

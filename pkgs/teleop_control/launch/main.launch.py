@@ -6,8 +6,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         Node(
-            name = 'test_control',
-            package = 'test_control',
+            name = 'teleop_control',
+            package = 'teleop_control',
             executable = 'main',
             output = 'screen',
             # parameters = []
