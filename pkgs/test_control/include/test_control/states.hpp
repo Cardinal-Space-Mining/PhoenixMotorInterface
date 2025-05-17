@@ -6,25 +6,25 @@
 
 #include "sensor_msgs/msg/joy.hpp"
 
-#include "custom_types/msg/talon_ctrl.hpp"
-#include "custom_types/msg/talon_info.hpp"
+#include "talon_msgs/msg/talon_ctrl.hpp"
+#include "talon_msgs/msg/talon_info.hpp"
 
 struct MotorSettings
 {
-    custom_types::msg::TalonCtrl track_right;
-    custom_types::msg::TalonCtrl track_left;
-    custom_types::msg::TalonCtrl trencher;
-    custom_types::msg::TalonCtrl hopper_belt;
-    custom_types::msg::TalonCtrl hopper_actuator;
+    talon_msgs::msg::TalonCtrl track_right;
+    talon_msgs::msg::TalonCtrl track_left;
+    talon_msgs::msg::TalonCtrl trencher;
+    talon_msgs::msg::TalonCtrl hopper_belt;
+    talon_msgs::msg::TalonCtrl hopper_actuator;
 };
 
 struct RobotState
 {
-    custom_types::msg::TalonInfo track_right;
-    custom_types::msg::TalonInfo track_left;
-    custom_types::msg::TalonInfo trencher;
-    custom_types::msg::TalonInfo hopper_belt;
-    custom_types::msg::TalonInfo hopper_actuator;
+    talon_msgs::msg::TalonInfo track_right;
+    talon_msgs::msg::TalonInfo track_left;
+    talon_msgs::msg::TalonInfo trencher;
+    talon_msgs::msg::TalonInfo hopper_belt;
+    talon_msgs::msg::TalonInfo hopper_actuator;
 };
 
 class TeleopStateMachine
