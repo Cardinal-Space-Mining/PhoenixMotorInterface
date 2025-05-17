@@ -40,15 +40,18 @@ target_link_libraries(main ${PHOENIX_LIBS_DIR}/libCTRE_Phoenix.so ${PHOENIX_LIBS
 install(TARGETS main
   DESTINATION lib/${PROJECT_NAME} )
 
-install(FILES 
-  ${PHOENIX_LIBS_DIR}/libCTRE_Phoenix.so
-  ${PHOENIX_LIBS_DIR}/libCTRE_PhoenixCCI.so
-  ${PHOENIX_LIBS_DIR}/libCTRE_PhoenixTools.so
-  DESTINATION lib/${PROJECT_NAME}
-)
-install(FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/patchelf_cmake_build_step.sh
-  DESTINATION share/${PROJECT_NAME} )
+# install(FILES 
+#   ${PHOENIX_LIBS_DIR}/libCTRE_Phoenix.so
+#   ${PHOENIX_LIBS_DIR}/libCTRE_PhoenixCCI.so
+#   ${PHOENIX_LIBS_DIR}/libCTRE_PhoenixTools.so
+#   DESTINATION lib/${PROJECT_NAME} )
+install(
+  CODE
+  "execute_process(COMMAND cp ${PHOENIX_LIBS_DIR}/libCTRE_Phoenix.so ${PHOENIX_LIBS_DIR}/libCTRE_PhoenixCCI.so ${PHOENIX_LIBS_DIR}/libCTRE_PhoenixTools.so ${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}/ )" )
+
+# install(FILES
+#   ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/patchelf_cmake_build_step.sh
+#   DESTINATION share/${PROJECT_NAME} )
 # install(FILES
 #   ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/can_bringup.sh
 #   DESTINATION share/${PROJECT_NAME} )
