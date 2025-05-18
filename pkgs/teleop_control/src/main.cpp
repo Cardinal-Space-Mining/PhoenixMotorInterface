@@ -17,15 +17,26 @@
 #define ENABLE_HEARTBEAT_PUB 0
 #endif
 
-enum class ControlMode {
-    DISABLED,
-    TELEOP,
-    AUTONOMOUS
-};
 
 using namespace std::chrono_literals;
 
-class RobotTeleopInterface {
+using talon_msgs::msg::TalonCtrl;
+using talon_msgs::msg::TalonInfo;
+
+
+enum class RobotControlMode : int8_t    // TODO: disabled should be 0!
+{
+    TELEOPERATED = 0,
+    DISABLED = 1,
+    AUTONOMOUS = 2
+};
+
+#define ROBOT_TOPIC(subtopic) "/lance/" subtopic
+#define TALON_CTRL_PUB_QOS 10
+
+
+class RobotTeleopInterface
+{
 private:
     void update_motors() {
         MotorSettings motor_settings =
@@ -37,26 +48,26 @@ private:
         hopper_act_ctrl->publish(motor_settings.hopper_actuator);
     }
 
-    void display_info_actuator(const talon_msgs::msg::TalonInfo &msg) {
-        std::clog
-                  << "Motor Temp: \t" << msg.temperature << "\n"
-                  << "Motor Volt: \t" << msg.bus_voltage << "\n"
-                  << "Output Percent: \t" << msg.output_percent << "\n"
-                  << "Output Voltage: \t" << msg.output_voltage << "\n"
-                  << "Output Current: \t" << msg.output_current << "\n"
-                  << "Motor Position: \t" << msg.position << "\n"
-                  << "Motor Velocity: \t" << msg.velocity << "\n"
-        << std::flush;
-    }
+    // void display_info_actuator(const talon_msgs::msg::TalonInfo &msg) {
+    //     std::clog
+    //               << "Motor Temp: \t" << msg.device_temp << "\n"
+    //               << "Motor Volt: \t" << msg.bus_voltage << "\n"
+    //               << "Output Percent: \t" << msg.output_percent << "\n"
+    //               << "Output Voltage: \t" << msg.output_voltage << "\n"
+    //               << "Output Current: \t" << msg.output_current << "\n"
+    //               << "Motor Position: \t" << msg.position << "\n"
+    //               << "Motor Velocity: \t" << msg.velocity << "\n"
+    //     << std::flush;
+    // }
 
     std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> talon_ctrl_pub(rclcpp::Node &parent, const std::string &name) {
-        return parent.create_publisher<talon_msgs::msg::TalonCtrl>(name, 10);
+        return parent.create_publisher<talon_msgs::msg::TalonCtrl>(name, TALON_CTRL_PUB_QOS);
     }
 
-    std::shared_ptr<rclcpp::Subscription<talon_msgs::msg::TalonInfo>> talon_info_sub(rclcpp::Node &parent, const std::string &name) {
-        return parent.create_subscription<talon_msgs::msg::TalonInfo>(name, 10, [this](const talon_msgs::msg::TalonInfo &msg) 
-            { display_info_actuator(msg); });
-    }
+    // std::shared_ptr<rclcpp::Subscription<talon_msgs::msg::TalonInfo>> talon_info_sub(rclcpp::Node &parent, const std::string &name) {
+    //     return parent.create_subscription<talon_msgs::msg::TalonInfo>(name, 10, [this](const talon_msgs::msg::TalonInfo &msg) 
+    //         { display_info_actuator(msg); });
+    // }
 
 public:
     RobotTeleopInterface(rclcpp::Node &parent) : 
@@ -65,11 +76,11 @@ public:
         // Motor Information subscribers
         // , hopper_info(talon_info_sub(parent, "hopper_info"))
         // // Motor Teleop Control Publishers
-        , track_right_ctrl(talon_ctrl_pub(parent, "track_right_ctrl"))
-        , track_left_ctrl(talon_ctrl_pub(parent, "track_left_ctrl"))
-        , trencher_ctrl(talon_ctrl_pub(parent, "trencher_ctrl"))
-        , hopper_ctrl(talon_ctrl_pub(parent, "hopper_belt_ctrl"))
-        , hopper_act_ctrl(talon_ctrl_pub(parent, "hopper_ctrl_teleop"))
+        , track_right_ctrl(talon_ctrl_pub(parent, ROBOT_TOPIC("track_right/ctrl") ))
+        , track_left_ctrl(talon_ctrl_pub(parent, ROBOT_TOPIC("track_left/ctrl") ))
+        , trencher_ctrl(talon_ctrl_pub(parent, ROBOT_TOPIC("trencher/ctrl") ))
+        , hopper_ctrl(talon_ctrl_pub(parent, ROBOT_TOPIC("hopper_belt/ctrl") ))
+        , hopper_act_ctrl(talon_ctrl_pub(parent, ROBOT_TOPIC("hopper_act/ctrl") ))
         , teleop_update_timer(
             parent.create_wall_timer(100ms, [this]() { this->update_motors(); }))
         {
@@ -78,13 +89,14 @@ public:
 private:
     std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::Joy>> joy_sub;
 
-    rclcpp::Subscription<talon_msgs::msg::TalonInfo>::SharedPtr hopper_info;
+    // rclcpp::Subscription<talon_msgs::msg::TalonInfo>::SharedPtr hopper_info;
 
-    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> track_right_ctrl;
-    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> track_left_ctrl;
-    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> trencher_ctrl;
-    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> hopper_ctrl;
-    std::shared_ptr<rclcpp::Publisher<talon_msgs::msg::TalonCtrl>> hopper_act_ctrl;
+    rclcpp::Publisher<TalonCtrl>::SharedPtr
+        track_right_ctrl,
+        track_left_ctrl,
+        trencher_ctrl,
+        hopper_ctrl,
+        hopper_act_ctrl;
 
 private:
     sensor_msgs::msg::Joy joy;
@@ -93,6 +105,7 @@ private:
 private:
     rclcpp::TimerBase::SharedPtr teleop_update_timer;
     TeleopStateMachine teleop_state;
+
 };
 
 class Controller : public rclcpp::Node
@@ -123,7 +136,7 @@ public:
 private:
     RobotTeleopInterface teleop_interface;
 
-    sensor_msgs::msg::Joy joy;
+    // sensor_msgs::msg::Joy joy;
     std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::Joy>> joy_sub;
 
     #if ENABLE_HEARTBEAT_PUB
@@ -136,7 +149,7 @@ private:
     static constexpr auto ENABLE_TIME = 250ms;
 
     rclcpp::TimerBase::SharedPtr timer_;
-    ControlMode current_state = ControlMode::DISABLED;
+    RobotControlMode current_state = RobotControlMode::DISABLED;
 
 };
 

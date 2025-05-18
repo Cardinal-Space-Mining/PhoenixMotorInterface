@@ -22,176 +22,238 @@
 
 using namespace std::chrono_literals;
 
-using TalonSRX = ctre::phoenix::motorcontrol::can::TalonSRX;
-using TalonCtrlSub = rclcpp::Subscription<talon_msgs::msg::TalonCtrl>::SharedPtr;
-using TalonInfoPub = rclcpp::Publisher<talon_msgs::msg::TalonInfo>::SharedPtr;
+using talon_msgs::msg::TalonCtrl;
+using talon_msgs::msg::TalonInfo;
+using ctre::phoenix::motorcontrol::can::TalonSRX;
 
-struct Gains
+
+enum class RobotControlMode : int8_t    // TODO: disabled should be 0!
 {
-    double P, I, D, F;
-};
-
-enum class BrakeMode : uint8_t {
-    COAST = 0,
-    BRAKE = 1
-};
-
-enum class RobotStatus : int8_t {
-    TELEOP   = 0,
+    TELEOPERATED = 0,
     DISABLED = 1,
-    AUTONOMY = 2
+    AUTONOMOUS = 2
 };
 
-namespace constants {
-static const std::string INTERFACE = "can0";
-static constexpr Gains DEFAULT_GAINS{0.0, 0.0, 0.0, 0.2};
-static constexpr Gains DefaultRobotGains{
-    0.11,
-    0.5,
-    0.0001,
-    0.12,
-};
-} // namespace constants
-
-class Robot : public rclcpp::Node {
-public:
-    Robot()
-    : rclcpp::Node("robot_phoenix5")
-    , heartbeat_sub(this->create_subscription<std_msgs::msg::Int32>(
-          "heartbeat", 10, [](const std_msgs::msg::Int32 & msg)
-          { ctre::phoenix::unmanaged::Unmanaged::FeedEnable(msg.data); }))
-    , hopper_ctrl_teleop(this->create_subscription<talon_msgs::msg::TalonCtrl>(
-        "hopper_ctrl_teleop", 10, [this](const talon_msgs::msg::TalonCtrl &msg)
-        { execute_ctrl(this->hopper_actuator, msg); }))
-    , hopper_ctrl_auto(this->create_subscription<talon_msgs::msg::TalonCtrl>(
-        "hopper_ctrl_auto", 10, [this](const talon_msgs::msg::TalonCtrl &msg)
-        { execute_ctrl(this->hopper_actuator, msg); }))
-    , hopper_info(this->create_publisher<talon_msgs::msg::TalonInfo>(
-        "hopper_info", 10))
-    // robot status (teleop, disabled, autonomy)
-    , robot_status(RobotStatus::DISABLED)
-    , robot_status_sub(this->create_subscription<std_msgs::msg::Int8>(
-        "robot_status", 10, [this](const std_msgs::msg::Int8 &msg)
-        { update_status(msg); }))
-    , info_timer(
-        this->create_wall_timer(100ms, [this]() { this->info_periodic(); }))
+namespace TalonStaticConfig
+{
+    struct Gains
     {
+        double P, I, D, F;
+    };
 
-        // config(hopper_actuator, constants::DEFAULT_GAINS, BrakeMode::BRAKE);
+    static const std::string INTERFACE = "can0";
+    static constexpr Gains DEFAULT_GAINS{ 0.0, 0.0, 0.0, 0.2 };
+    static constexpr Gains DefaultRobotGains{
+        0.11,
+        0.5,
+        0.0001,
+        0.12,
+    };
+}
 
-        RCLCPP_DEBUG(this->get_logger(), "Initialized Node");
+#define ROBOT_TOPIC(subtopic) "/lance/" subtopic
+#define TALON_CTRL_SUB_QOS 10
+#define ROBOT_CTRL_SUB_QOS 10
+
+
+class Phoenix5Driver :
+    public rclcpp::Node
+{
+public:
+    Phoenix5Driver() :
+        Node{ "phoenix5_driver" },
+        hopper_info
+        {
+            this->create_publisher<TalonInfo>(ROBOT_TOPIC("hopper_act/info"), TALON_CTRL_SUB_QOS)
+        },
+        hopper_ctrl
+        {
+            this->create_subscription<TalonCtrl>(
+                ROBOT_TOPIC("hopper_act/ctrl"),
+                TALON_CTRL_SUB_QOS,
+                [this](const TalonCtrl &msg){ this->execute_ctrl(this->hopper_actuator, msg); } )
+        },
+        watchdog_sub
+        {
+            this->create_subscription<std_msgs::msg::Int32>(
+                ROBOT_TOPIC("watchdog_feed"),
+                ROBOT_CTRL_SUB_QOS,
+                [](const std_msgs::msg::Int32 & msg){ ctre::phoenix::unmanaged::Unmanaged::FeedEnable(msg.data); } )
+        },
+        robot_mode_sub
+        {
+            this->create_subscription<std_msgs::msg::Int8>(
+                ROBOT_TOPIC("robot_mode"),
+                ROBOT_CTRL_SUB_QOS,
+                [this](const std_msgs::msg::Int8 &msg){ this->update_status_cb(msg); })
+        },
+        info_timer
+        {
+            this->create_wall_timer(100ms, [this](){ this->info_periodic_cb(); })
+        }
+    {
+        this->hopper_actuator.Config_kP(0, TalonStaticConfig::DEFAULT_GAINS.P);
+        this->hopper_actuator.Config_kI(0, TalonStaticConfig::DEFAULT_GAINS.I);
+        this->hopper_actuator.Config_kD(0, TalonStaticConfig::DEFAULT_GAINS.D);
+        this->hopper_actuator.Config_kF(0, TalonStaticConfig::DEFAULT_GAINS.F);
+        this->hopper_actuator.SetNeutralMode(NeutralMode::Brake);
+
+        RCLCPP_DEBUG(this->get_logger(), "Completed Phoenix5 Driver Node Initialization");
     }
 
 private:
+    void execute_ctrl(TalonSRX &motor, const TalonCtrl &msg)
+    {
+        switch(this->robot_mode)
+        {
+            case RobotControlMode::TELEOPERATED:
+            case RobotControlMode::AUTONOMOUS:
+            {
+                switch(msg.mode)
+                {
+                    case TalonCtrl::PERCENT_OUTPUT:
+                    {
+                        motor.Set(ControlMode::PercentOutput, msg.value);
+                        break;
+                    }
+                    case TalonCtrl::POSITION:
+                    {
+                        motor.Set(ControlMode::Position, msg.value);
+                        break;
+                    }
+                    case TalonCtrl::VELOCITY:
+                    {
+                        motor.Set(ControlMode::Velocity, msg.value);
+                        break;
+                    }
+                    case TalonCtrl::CURRENT:
+                    {
+                        motor.Set(ControlMode::Current, msg.value);
+                        break;
+                    }
+                    case TalonCtrl::VOLTAGE:
+                    {
+                        // motor.Set(ControlMode::Vol)
+                        break;
+                    }
+                    case TalonCtrl::DISABLED:
+                    {
+                        motor.Set(ControlMode::Disabled, 0.);
+                        return;
+                    }
+                    case TalonCtrl::FOLLOWER:
+                    {
+                        motor.Set(ControlMode::Follower, msg.value);
+                        break;
+                    }
+                    case TalonCtrl::MOTION_MAGIC:
+                    {
+                        motor.Set(ControlMode::MotionMagic, msg.value);
+                        break;
+                    }
+                    case TalonCtrl::MOTION_PROFILE:
+                    {
+                        motor.Set(ControlMode::MotionProfile, msg.value);
+                        break;
+                    }
+                    case TalonCtrl::MOTION_PROFILE_ARC:
+                    {
+                        motor.Set(ControlMode::MotionProfileArc, msg.value);
+                        break;
+                    }
+                    case TalonCtrl::MUSIC_TONE:
+                    {
+                        motor.Set(ControlMode::MusicTone, msg.value);
+                        break;
+                    }
+                }
 
-    void config(TalonSRX &motor, const Gains &gains, BrakeMode brake_mode) {
-        // config motor settings here
-        motor.Config_kD(0, gains.P);
-        motor.Config_kP(0, gains.I);
-        motor.Config_kI(0, gains.D);
-        motor.Config_kF(0, gains.F);
-
-        switch (brake_mode) {
-            case BrakeMode::BRAKE:
-                motor.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+                RCLCPP_DEBUG(this->get_logger(), "Set motor mode to %d and output to: %f", static_cast<int>(msg.mode), msg.value);
                 break;
-            case BrakeMode::COAST:
-                motor.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Coast);
+            }
+            case RobotControlMode::DISABLED:
+            default:
+            {
+                motor.Set(ControlMode::Disabled, 0.);
                 break;
+            }
         }
     }
 
-    void execute_ctrl(TalonSRX &motor, const talon_msgs::msg::TalonCtrl &msg) {
-        RCLCPP_INFO(this->get_logger(), "Motor output: %f", msg.value);
-        // RCLCPP_DEBUG(this->get_logger(), "msg: %s", msg);
-        if (robot_status == RobotStatus::TELEOP || robot_status == RobotStatus::AUTONOMY) {
-            motor.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, msg.value);
-        } else {
-            motor.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-        }
-    }
+    inline TalonInfo get_info(TalonSRX &motor)
+    {
+        TalonInfo info;
+        info.header.stamp = this->get_clock()->now();
 
-    talon_msgs::msg::TalonInfo get_info(TalonSRX &motor) {
-        talon_msgs::msg::TalonInfo info;
-        // info.temperature    = motor.GetTemperature();
-        // info.bus_voltage    = motor.GetBusVoltage();
-        // info.output_percent = motor.GetMotorOutputPercent();
-        // info.output_voltage = motor.GetMotorOutputVoltage();
-        // info.output_current = motor.GetOutputCurrent();
-        // info.position       = motor.GetSelectedSensorPosition();
-        // info.velocity       = motor.GetSelectedSensorVelocity();
-        info.temperature = 0;
-        info.bus_voltage = 0;
-        info.output_percent = 0;
-        info.output_voltage = 0;
-        info.output_current = 0;
-        info.position = 0;
-        info.velocity = 0;
+        info.device_temp    = motor.GetTemperature();
+        info.bus_voltage    = motor.GetBusVoltage();
+        info.output_percent = motor.GetMotorOutputPercent();
+        info.output_voltage = motor.GetMotorOutputVoltage();
+        info.output_current = motor.GetOutputCurrent();
+        info.position       = motor.GetSelectedSensorPosition();
+        info.velocity       = motor.GetSelectedSensorVelocity();
 
         return info;
     }
 
-    void info_periodic() {
+    void info_periodic_cb()
+    {
         hopper_info->publish(get_info(hopper_actuator));
     }
 
-    void update_status(const std_msgs::msg::Int8 &msg) {
-        switch (msg.data) {
-        case 0:
-            robot_status = RobotStatus::TELEOP;
-            break;
-        case 1:
-            robot_status = RobotStatus::DISABLED;
-            break;
-        case 2:
-            robot_status = RobotStatus::AUTONOMY;
-            break;
-        default:
-            robot_status = RobotStatus::DISABLED;
-            break;
+    void update_status_cb(const std_msgs::msg::Int8 &msg)
+    {
+        switch(msg.data)
+        {
+            case 0:
+            {
+                this->robot_mode = RobotControlMode::TELEOPERATED;
+                break;
+            }
+            case 2:
+            {
+                this->robot_mode = RobotControlMode::AUTONOMOUS;
+                break;
+            }
+            case 1:
+            default:
+            {
+                this->robot_mode = RobotControlMode::DISABLED;
+                this->hopper_actuator.Set(ControlMode::Disabled, 0.);
+                break;
+            }
         }
     }
 
 private:
-    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr heartbeat_sub;
-    rclcpp::Subscription<talon_msgs::msg::TalonCtrl>::SharedPtr hopper_ctrl_teleop;
-    rclcpp::Subscription<talon_msgs::msg::TalonCtrl>::SharedPtr hopper_ctrl_auto;
+    TalonSRX hopper_actuator{4, TalonStaticConfig::INTERFACE};
 
-private:
-    rclcpp::Publisher<talon_msgs::msg::TalonInfo>::SharedPtr hopper_info;
+    rclcpp::Publisher<TalonInfo>::SharedPtr hopper_info;
+    rclcpp::Subscription<TalonCtrl>::SharedPtr hopper_ctrl;
 
-private:
-    TalonSRX hopper_actuator{4, constants::INTERFACE};
-
-private:
-    RobotStatus robot_status;
-    rclcpp::Subscription<std_msgs::msg::Int8>::SharedPtr robot_status_sub;
-
-private:
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr watchdog_sub;
+    rclcpp::Subscription<std_msgs::msg::Int8>::SharedPtr robot_mode_sub;
     rclcpp::TimerBase::SharedPtr info_timer;
 
+    RobotControlMode robot_mode = RobotControlMode::DISABLED;
+
 };
+
+
 
 int main(int argc, char ** argv)
 {
     ctre::phoenix::unmanaged::Unmanaged::LoadPhoenix();
+    std::cout << "Loaded Phoenix 5 Unmanaged" << std::endl;
 
-    std::cout << "Loaded Pheonix" << std::endl;
-
-    // Init ROS2 for logging capabilities
     rclcpp::init(argc, argv);
-
-    std::cout << "Loaded rclcpp" << std::endl;
-
-    auto node = std::make_shared<Robot>();
-
-    std::cout << "Loaded Bot Node" << std::endl;
+    auto node = std::make_shared<Phoenix5Driver>();
+    RCLCPP_INFO(node->get_logger(), "Driver node (Phoenix5) has started");
 
     rclcpp::spin(node);
 
-    std::cout << "Spun Node" << std::endl;
+    RCLCPP_INFO(node->get_logger(), "Driver node (Phoenix6) shutting down...");
     rclcpp::shutdown();
 
-    std::cout << "Loaded Done" << std::endl;
     return EXIT_SUCCESS;
 }
