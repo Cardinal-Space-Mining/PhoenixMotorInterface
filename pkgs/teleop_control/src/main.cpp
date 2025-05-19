@@ -14,7 +14,7 @@
 #include "talon_msgs/msg/talon_info.hpp"
 
 #ifndef ENABLE_HEARTBEAT_PUB
-#define ENABLE_HEARTBEAT_PUB 0
+#define ENABLE_HEARTBEAT_PUB 1
 #endif
 
 
@@ -122,7 +122,7 @@ public:
                     ENABLE_TIME.count();
                 this->heartbeat->publish(msg);
         }))
-    , heartbeat(create_publisher<std_msgs::msg::Int32>("heartbeat", 10))
+    , heartbeat(create_publisher<std_msgs::msg::Int32>(ROBOT_TOPIC("watchdog_feed"), 10))
     #endif
     {
 
