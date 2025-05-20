@@ -16,6 +16,8 @@
 #include "talon_msgs/msg/talon_faults.hpp"
 
 
+#define HARD_ENABLE 1
+
 #define phx6 ctre::phoenix6
 using namespace std::chrono_literals;
 
@@ -114,7 +116,13 @@ public:
                 rclcpp::SensorDataQoS{},
                 [this](const std_msgs::msg::Int32& msg){ this->feed_watchdog_status(msg.data); } )
         },
-        info_pub_timer{ this->create_wall_timer(100ms, [this](){ this->pub_motor_info_cb(); }) },
+        info_pub_timer{ this->create_wall_timer(100ms,
+            [this](){
+                this->pub_motor_info_cb();
+            #if HARD_ENABLE
+                this->feed_watchdog_status(250);
+            #endif
+            }) },
         fault_pub_timer{ this->create_wall_timer(250ms, [this](){ this->pub_motor_fault_cb(); }) }
     {
         this->configure_motors_cb();
@@ -254,8 +262,8 @@ void Phoenix6Driver::configure_motors_cb()
         phx6::configs::TalonFXConfiguration{}
             .WithSlot0(TalonStaticConfig::SLOT0_CONFIG)
             .WithMotorOutput(TalonStaticConfig::MOTOR_OUTPUT_CONFIG)
-            .WithFeedback(TalonStaticConfig::FEEDBACK_CONFIGS)
-            .WithCurrentLimits(TalonStaticConfig::CURRENT_LIMIT_CONFIG);
+            .WithFeedback(TalonStaticConfig::FEEDBACK_CONFIGS);
+            // .WithCurrentLimits(TalonStaticConfig::CURRENT_LIMIT_CONFIG);
 
     config.MotorOutput.Inverted = phx6::signals::InvertedValue::Clockwise_Positive;     // trencher positive should result in digging
     trencher.GetConfigurator().Apply(config);
