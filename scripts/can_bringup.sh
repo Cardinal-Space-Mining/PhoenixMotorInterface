@@ -38,6 +38,11 @@ echo "Bringing up can0..."
 sudo slcand -o -c -s0 "$DEVICE" can0
 if [ $? -ne 0 ]; then
     echo "ERROR: Failed to start slcand on $DEVICE"
+    echo "Shutting down the can device."
+
+    sudo ip link set can0 down
+    sudo pkill slcand
+    sudo ip link delete can0
     exit 1
 fi
 sudo ip link set can0 type can bitrate 1000000
