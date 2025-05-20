@@ -3,7 +3,7 @@
 echo "Detecting CANable USB device..."
 
 # Known CANable vendor:product ID
-CANABLE_ID="1d50:606f"
+CANABLE_ID="16d0:117e"
 
 # Search all ttyACM devices for the correct ID
 for DEV in /dev/ttyACM*; do
@@ -19,6 +19,7 @@ for DEV in /dev/ttyACM*; do
     PID=$(echo "$USB_ID" | grep ID_MODEL_ID | cut -d'=' -f2)
 
     DEVICE_ID="$VID:$PID"
+    echo "Found: $DEVICE_ID"
 
     if [ "$DEVICE_ID" == "$CANABLE_ID" ]; then
         DEVICE="$DEV"
