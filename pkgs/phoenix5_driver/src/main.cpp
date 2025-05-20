@@ -1,38 +1,29 @@
-
 #include <chrono>
 #include <memory>
-#include <span>
-#include <utility>
-#include <vector>
-
-#include <unistd.h>
-
-#include "talon_msgs/msg/talon_ctrl.hpp"
-#include "talon_msgs/msg/talon_info.hpp"
+#include <iostream>
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/int32.hpp>
 #include <std_msgs/msg/int8.hpp>
 
 #define Phoenix_No_WPI // remove WPI dependencies
-#include "ctre/Phoenix.h"
-#include "ctre/phoenix/cci/Unmanaged_CCI.h"
-#include "ctre/phoenix/platform/Platform.hpp"
-#include "ctre/phoenix/unmanaged/Unmanaged.h"
+#include <ctre/Phoenix.h>
+#include <ctre/phoenix/cci/Unmanaged_CCI.h>
+#include <ctre/phoenix/platform/Platform.hpp>
+#include <ctre/phoenix/unmanaged/Unmanaged.h>
+
+#include "talon_msgs/msg/talon_ctrl.hpp"
+#include "talon_msgs/msg/talon_info.hpp"
+#include "talon_msgs/msg/talon_faults.hpp"
+
 
 using namespace std::chrono_literals;
 
 using talon_msgs::msg::TalonCtrl;
 using talon_msgs::msg::TalonInfo;
+using talon_msgs::msg::TalonFaults;
 using ctre::phoenix::motorcontrol::can::TalonSRX;
 
-
-enum class RobotControlMode : int8_t    // TODO: disabled should be 0!
-{
-    TELEOPERATED = 0,
-    DISABLED = 1,
-    AUTONOMOUS = 2
-};
 
 namespace TalonStaticConfig
 {
@@ -41,7 +32,7 @@ namespace TalonStaticConfig
         double P, I, D, F;
     };
 
-    static const std::string INTERFACE = "can0";
+    static constexpr char const* INTERFACE = "can0";
     static constexpr Gains DEFAULT_GAINS{ 0.0, 0.0, 0.0, 0.2 };
     static constexpr Gains DefaultRobotGains{
         0.11,
@@ -62,182 +53,219 @@ class Phoenix5Driver :
 public:
     Phoenix5Driver() :
         Node{ "phoenix5_driver" },
-        hopper_info
-        {
-            this->create_publisher<TalonInfo>(ROBOT_TOPIC("hopper_act/info"), TALON_CTRL_SUB_QOS)
-        },
-        hopper_ctrl
+
+        hopper_actuator{ 4, TalonStaticConfig::INTERFACE },
+        hopper_info_pub{ this->create_publisher<TalonInfo>(ROBOT_TOPIC("hopper_act/info"), rclcpp::SensorDataQoS{}) },
+        hopper_faults_pub{ this->create_publisher<TalonFaults>(ROBOT_TOPIC("hopper_act/faults"), rclcpp::SensorDataQoS{}) },
+        hopper_ctrl_sub
         {
             this->create_subscription<TalonCtrl>(
                 ROBOT_TOPIC("hopper_act/ctrl"),
                 TALON_CTRL_SUB_QOS,
                 [this](const TalonCtrl &msg){ this->execute_ctrl(this->hopper_actuator, msg); } )
         },
-        watchdog_sub
+        watchdog_status_sub
         {
             this->create_subscription<std_msgs::msg::Int32>(
-                ROBOT_TOPIC("watchdog_feed"),
-                ROBOT_CTRL_SUB_QOS,
-                [](const std_msgs::msg::Int32 & msg){ ctre::phoenix::unmanaged::Unmanaged::FeedEnable(msg.data); } )
+                ROBOT_TOPIC("watchdog_status"),
+                rclcpp::SensorDataQoS{},
+                [this](const std_msgs::msg::Int32& msg){ this->feed_watchdog_status(msg.data); } )
         },
-        robot_mode_sub
-        {
-            this->create_subscription<std_msgs::msg::Int8>(
-                ROBOT_TOPIC("robot_mode"),
-                ROBOT_CTRL_SUB_QOS,
-                [this](const std_msgs::msg::Int8 &msg){ this->update_status_cb(msg); })
-        },
-        info_timer
-        {
-            this->create_wall_timer(100ms, [this](){ this->info_periodic_cb(); })
-        }
+        info_pub_timer{ this->create_wall_timer(100ms, [this](){ this->pub_motor_info_cb(); }) },
+        fault_pub_timer{ this->create_wall_timer(250ms, [this](){ this->pub_motor_fault_cb(); }) }
     {
+        this->hopper_actuator.ConfigFactoryDefault();
         this->hopper_actuator.Config_kP(0, TalonStaticConfig::DEFAULT_GAINS.P);
         this->hopper_actuator.Config_kI(0, TalonStaticConfig::DEFAULT_GAINS.I);
         this->hopper_actuator.Config_kD(0, TalonStaticConfig::DEFAULT_GAINS.D);
         this->hopper_actuator.Config_kF(0, TalonStaticConfig::DEFAULT_GAINS.F);
         this->hopper_actuator.SetNeutralMode(NeutralMode::Brake);
+        this->hopper_actuator.ConfigNeutralDeadband(5.);
+        this->hopper_actuator.ClearStickyFaults();
 
         RCLCPP_DEBUG(this->get_logger(), "Completed Phoenix5 Driver Node Initialization");
     }
 
 private:
-    void execute_ctrl(TalonSRX &motor, const TalonCtrl &msg)
-    {
-        switch(this->robot_mode)
-        {
-            case RobotControlMode::TELEOPERATED:
-            case RobotControlMode::AUTONOMOUS:
-            {
-                switch(msg.mode)
-                {
-                    case TalonCtrl::PERCENT_OUTPUT:
-                    {
-                        motor.Set(ControlMode::PercentOutput, msg.value);
-                        break;
-                    }
-                    case TalonCtrl::POSITION:
-                    {
-                        motor.Set(ControlMode::Position, msg.value);
-                        break;
-                    }
-                    case TalonCtrl::VELOCITY:
-                    {
-                        motor.Set(ControlMode::Velocity, msg.value);
-                        break;
-                    }
-                    case TalonCtrl::CURRENT:
-                    {
-                        motor.Set(ControlMode::Current, msg.value);
-                        break;
-                    }
-                    case TalonCtrl::VOLTAGE:
-                    {
-                        // motor.Set(ControlMode::Vol)
-                        break;
-                    }
-                    case TalonCtrl::DISABLED:
-                    {
-                        motor.Set(ControlMode::Disabled, 0.);
-                        return;
-                    }
-                    case TalonCtrl::FOLLOWER:
-                    {
-                        motor.Set(ControlMode::Follower, msg.value);
-                        break;
-                    }
-                    case TalonCtrl::MOTION_MAGIC:
-                    {
-                        motor.Set(ControlMode::MotionMagic, msg.value);
-                        break;
-                    }
-                    case TalonCtrl::MOTION_PROFILE:
-                    {
-                        motor.Set(ControlMode::MotionProfile, msg.value);
-                        break;
-                    }
-                    case TalonCtrl::MOTION_PROFILE_ARC:
-                    {
-                        motor.Set(ControlMode::MotionProfileArc, msg.value);
-                        break;
-                    }
-                    case TalonCtrl::MUSIC_TONE:
-                    {
-                        motor.Set(ControlMode::MusicTone, msg.value);
-                        break;
-                    }
-                }
+    void feed_watchdog_status(int32_t status);
 
-                RCLCPP_DEBUG(this->get_logger(), "Set motor mode to %d and output to: %f", static_cast<int>(msg.mode), msg.value);
-                break;
-            }
-            case RobotControlMode::DISABLED:
-            default:
-            {
-                motor.Set(ControlMode::Disabled, 0.);
-                break;
-            }
-        }
-    }
+    void pub_motor_info_cb();
+    void pub_motor_fault_cb();
 
-    inline TalonInfo get_info(TalonSRX &motor)
-    {
-        TalonInfo info;
-        info.header.stamp = this->get_clock()->now();
-
-        info.device_temp    = motor.GetTemperature();
-        info.bus_voltage    = motor.GetBusVoltage();
-        info.output_percent = motor.GetMotorOutputPercent();
-        info.output_voltage = motor.GetMotorOutputVoltage();
-        info.output_current = motor.GetOutputCurrent();
-        info.position       = motor.GetSelectedSensorPosition();
-        info.velocity       = motor.GetSelectedSensorVelocity();
-
-        return info;
-    }
-
-    void info_periodic_cb()
-    {
-        hopper_info->publish(get_info(hopper_actuator));
-    }
-
-    void update_status_cb(const std_msgs::msg::Int8 &msg)
-    {
-        switch(msg.data)
-        {
-            case 0:
-            {
-                this->robot_mode = RobotControlMode::TELEOPERATED;
-                break;
-            }
-            case 2:
-            {
-                this->robot_mode = RobotControlMode::AUTONOMOUS;
-                break;
-            }
-            case 1:
-            default:
-            {
-                this->robot_mode = RobotControlMode::DISABLED;
-                this->hopper_actuator.Set(ControlMode::Disabled, 0.);
-                break;
-            }
-        }
-    }
+    void execute_ctrl(TalonSRX &motor, const TalonCtrl &msg);
 
 private:
-    TalonSRX hopper_actuator{4, TalonStaticConfig::INTERFACE};
+    TalonSRX hopper_actuator;
 
-    rclcpp::Publisher<TalonInfo>::SharedPtr hopper_info;
-    rclcpp::Subscription<TalonCtrl>::SharedPtr hopper_ctrl;
+    rclcpp::Publisher<TalonInfo>::SharedPtr
+        hopper_info_pub;
+    rclcpp::Publisher<TalonFaults>::SharedPtr
+        hopper_faults_pub;
+    rclcpp::Subscription<TalonCtrl>::SharedPtr
+        hopper_ctrl_sub;
 
-    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr watchdog_sub;
-    rclcpp::Subscription<std_msgs::msg::Int8>::SharedPtr robot_mode_sub;
-    rclcpp::TimerBase::SharedPtr info_timer;
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr
+        watchdog_status_sub;
+    rclcpp::TimerBase::SharedPtr
+        info_pub_timer,
+        fault_pub_timer;
 
-    RobotControlMode robot_mode = RobotControlMode::DISABLED;
+    bool is_disabled = false;
 
 };
+
+
+TalonInfo& operator<<(TalonInfo& info, TalonSRX& m)
+{
+    info.position       = m.GetSelectedSensorPosition();
+    info.velocity       = m.GetSelectedSensorVelocity();
+
+    info.device_temp    = m.GetTemperature();
+    info.bus_voltage    = m.GetBusVoltage();
+    info.supply_current = m.GetSupplyCurrent();
+
+    info.output_percent = m.GetMotorOutputPercent();
+    info.output_voltage = m.GetMotorOutputVoltage();
+    info.output_current = m.GetOutputCurrent();
+
+    info.control_mode   = static_cast<uint8_t>(m.GetControlMode());
+
+    return info;
+}
+
+TalonFaults& operator<<(TalonFaults& faults, TalonSRX& m)
+{
+    Faults f;
+    m.GetFaults(f);
+
+    faults.faults = f.ToBitfield();
+
+    faults.hardware_fault = f.HardwareFailure;
+    faults.undervoltage_fault = f.UnderVoltage;
+    faults.boot_fault = f.ResetDuringEn;
+    faults.overvoltage_fault = f.SupplyOverV;
+    faults.unstable_voltage_fault = f.SupplyUnstable;
+
+    StickyFaults sf;
+    m.GetStickyFaults(sf);
+
+    faults.sticky_faults = sf.ToBitfield();
+
+    faults.sticky_hardware_fault = sf.HardwareESDReset;
+    faults.sticky_undervoltage_fault = sf.UnderVoltage;
+    faults.sticky_boot_fault = sf.ResetDuringEn;
+    faults.sticky_overvoltage_fault = sf.SupplyOverV;
+    faults.sticky_unstable_voltage_fault = sf.SupplyUnstable;
+
+    return faults;
+}
+
+
+void Phoenix5Driver::feed_watchdog_status(int32_t status)
+{
+    /* Watchdog feed decoding:
+     * POSTIVE feed time --> enabled
+     * ZERO feed time --> disabled
+     * NEGATIVE feed time --> autonomous */
+    if(!status)
+    {
+        this->hopper_actuator.Set(ControlMode::Disabled, 0.);
+        this->is_disabled = true;
+    }
+    else
+    {
+        ctre::phoenix::unmanaged::Unmanaged::FeedEnable(std::abs(status));
+        this->is_disabled = false;
+    }
+}
+
+void Phoenix5Driver::pub_motor_info_cb()
+{
+    TalonInfo info_msg{};
+    info_msg.header.stamp = this->get_clock()->now();
+    info_msg.enabled = !this->is_disabled;
+
+    this->hopper_info_pub->publish( (info_msg << this->hopper_actuator) );
+}
+
+void Phoenix5Driver::pub_motor_fault_cb()
+{
+    TalonFaults faults_msg{};
+    faults_msg.header.stamp = this->get_clock()->now();
+
+    this->hopper_faults_pub->publish( (faults_msg << this->hopper_actuator) );
+}
+
+void Phoenix5Driver::execute_ctrl(TalonSRX &motor, const TalonCtrl &msg)
+{
+    if(this->is_disabled)
+    {
+        motor.Set(ControlMode::Disabled, 0.);
+    }
+    else
+    {
+        switch(msg.mode)
+        {
+            case TalonCtrl::PERCENT_OUTPUT:
+            {
+                motor.Set(ControlMode::PercentOutput, msg.value);
+                break;
+            }
+            case TalonCtrl::POSITION:
+            {
+                motor.Set(ControlMode::Position, msg.value);
+                break;
+            }
+            case TalonCtrl::VELOCITY:
+            {
+                motor.Set(ControlMode::Velocity, msg.value);
+                break;
+            }
+            case TalonCtrl::CURRENT:
+            {
+                motor.Set(ControlMode::Current, msg.value);
+                break;
+            }
+            case TalonCtrl::VOLTAGE:
+            {
+                // motor.Set(ControlMode::Vol)
+                break;
+            }
+            case TalonCtrl::DISABLED:
+            {
+                motor.Set(ControlMode::Disabled, 0.);
+                return;
+            }
+            case TalonCtrl::FOLLOWER:
+            {
+                motor.Set(ControlMode::Follower, msg.value);
+                break;
+            }
+            case TalonCtrl::MOTION_MAGIC:
+            {
+                motor.Set(ControlMode::MotionMagic, msg.value);
+                break;
+            }
+            case TalonCtrl::MOTION_PROFILE:
+            {
+                motor.Set(ControlMode::MotionProfile, msg.value);
+                break;
+            }
+            case TalonCtrl::MOTION_PROFILE_ARC:
+            {
+                motor.Set(ControlMode::MotionProfileArc, msg.value);
+                break;
+            }
+            case TalonCtrl::MUSIC_TONE:
+            {
+                motor.Set(ControlMode::MusicTone, msg.value);
+                break;
+            }
+        }
+
+        RCLCPP_DEBUG(this->get_logger(), "Set motor mode to %d and output to: %f", static_cast<int>(msg.mode), msg.value);
+    }
+}
 
 
 
