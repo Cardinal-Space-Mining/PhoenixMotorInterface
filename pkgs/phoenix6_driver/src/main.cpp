@@ -16,7 +16,7 @@
 #include "talon_msgs/msg/talon_faults.hpp"
 
 
-#define HARD_ENABLE 1
+#define HARD_ENABLE 0
 
 #define phx6 ctre::phoenix6
 using namespace std::chrono_literals;
