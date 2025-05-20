@@ -19,7 +19,6 @@ for DEV in /dev/ttyACM*; do
     PID=$(echo "$USB_ID" | grep ID_MODEL_ID | cut -d'=' -f2)
 
     DEVICE_ID="$VID:$PID"
-    echo "Found: $DEVICE_ID"
 
     if [ "$DEVICE_ID" == "$CANABLE_ID" ]; then
         DEVICE="$DEV"
@@ -37,6 +36,10 @@ echo "Bringing up can0..."
 
 # Start slcand and bring up can0
 sudo slcand -o -c -s0 "$DEVICE" can0
+if [ $? -ne 0 ]; then
+    echo "ERROR: Failed to start slcand on $DEVICE"
+    exit 1
+fi
 sudo ip link set can0 type can bitrate 1000000
 sudo ip link set can0 up
 sudo ip link set can0 txqueuelen 1000
