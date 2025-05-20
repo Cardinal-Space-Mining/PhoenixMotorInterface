@@ -99,8 +99,9 @@ protected:
 public:
     Controller() :
         Node("controller_node"),
-        teleop_interface(*this),
+        teleop_interface(*this)
     #if ENABLE_HEARTBEAT_PUB
+        ,
         heartbeat_pub{ create_publisher<std_msgs::msg::Int32>(ROBOT_TOPIC("watchdog_status"), rclcpp::SensorDataQoS{}) },
         heartbeat_timer
         {
