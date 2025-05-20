@@ -14,7 +14,7 @@
 #include "talon_msgs/msg/talon_info.hpp"
 
 #ifndef ENABLE_HEARTBEAT_PUB
-#define ENABLE_HEARTBEAT_PUB 1
+#define ENABLE_HEARTBEAT_PUB 0
 #endif
 
 
