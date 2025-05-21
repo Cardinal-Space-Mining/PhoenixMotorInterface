@@ -1,5 +1,4 @@
-#ifndef MISSION_CTRL_STATES_HPP_6_27_2024
-#define MISSION_CTRL_STATES_HPP_6_27_2024
+#pragma once
 
 #include <variant>
 #include <limits>
@@ -9,82 +8,96 @@
 #include "talon_msgs/msg/talon_ctrl.hpp"
 #include "talon_msgs/msg/talon_info.hpp"
 
+
+using talon_msgs::msg::TalonCtrl;
+using talon_msgs::msg::TalonInfo;
+using JoyMsg = sensor_msgs::msg::Joy;
+
 struct MotorSettings
 {
-    talon_msgs::msg::TalonCtrl track_right;
-    talon_msgs::msg::TalonCtrl track_left;
-    talon_msgs::msg::TalonCtrl trencher;
-    talon_msgs::msg::TalonCtrl hopper_belt;
-    talon_msgs::msg::TalonCtrl hopper_actuator;
+    TalonCtrl track_right;
+    TalonCtrl track_left;
+    TalonCtrl trencher;
+    TalonCtrl hopper_belt;
+    TalonCtrl hopper_actuator;
 };
 
-struct RobotState
+struct RobotMotorInfo
 {
-    talon_msgs::msg::TalonInfo track_right;
-    talon_msgs::msg::TalonInfo track_left;
-    talon_msgs::msg::TalonInfo trencher;
-    talon_msgs::msg::TalonInfo hopper_belt;
-    talon_msgs::msg::TalonInfo hopper_actuator;
+    TalonInfo track_right;
+    TalonInfo track_left;
+    TalonInfo trencher;
+    TalonInfo hopper_belt;
+    TalonInfo hopper_actuator;
 };
+
 
 class TeleopStateMachine
 {
-public:
-    TeleopStateMachine()
-    : state_info{NormalInfo()}
+protected:
+    enum class RobotControlMode
     {
-        RobotState state;
-        set_state(State::Normal, state);
-    }
-
-public:
-    MotorSettings update(const RobotState & robot,
-                         const sensor_msgs::msg::Joy & ctrl);
-
-private:
-    MotorSettings normal_state(const RobotState & robot,
-                               const sensor_msgs::msg::Joy & ctrl);
-    MotorSettings trench_state(const RobotState & robot,
-                               const sensor_msgs::msg::Joy & ctrl);
-    MotorSettings offload_state(const RobotState & robot,
-                                const sensor_msgs::msg::Joy & ctrl);
-
-private:
-    enum class Lifecycle
+        Manual,
+        Trench,
+        Offload
+    };
+    enum class CommandStage
     {
         Start,
         Norm,
         End
     };
 
-    struct NormalInfo
+protected:
+    struct ManualInfo
     {
         double speed_scalar = 1.0;
     };
     struct OffloadInfo
     {
-        Lifecycle lifecycle = Lifecycle::Start;
+        CommandStage stage = CommandStage::Start;
         double start_pos = std::numeric_limits<double>::min();
         double track_scalar = 1.0;
     };
-
     struct TrenchInfo
     {
-        Lifecycle lifecycle = Lifecycle::Start;
+        CommandStage stage = CommandStage::Start;
     };
 
-    enum class State
+public:
+    TeleopStateMachine() :
+        command_data{ ManualInfo{} }
     {
-        Normal,
-        Trench,
-        Offload
-    };
+        RobotMotorInfo info;
+        this->setControlMode(RobotControlMode::Manual, info);
+    }
+
+public:
+    bool update(
+        MotorSettings& settings,
+        const RobotMotorInfo& robot,
+        const JoyMsg& ctrl );
 
 private:
-    void set_state(State state, const RobotState & robot);
+    void setControlMode(
+        RobotControlMode mode,
+        const RobotMotorInfo& motor_info );
 
-    State current_state;
-    std::variant<NormalInfo, OffloadInfo, TrenchInfo> state_info;
+    bool runManualMode(
+        MotorSettings& settings,
+        const RobotMotorInfo& motor_info,
+        const JoyMsg& ctrl );
+    bool runTrenchCommand(
+        MotorSettings& settings,
+        const RobotMotorInfo& motor_info,
+        const JoyMsg& ctrl );
+    bool runOffloadCommand(
+        MotorSettings& settings,
+        const RobotMotorInfo& motor_info,
+        const JoyMsg& ctrl );
+
+private:
+    RobotControlMode current_control_mode;
+    std::variant<ManualInfo, OffloadInfo, TrenchInfo> command_data;
+
 };
-
-#endif
