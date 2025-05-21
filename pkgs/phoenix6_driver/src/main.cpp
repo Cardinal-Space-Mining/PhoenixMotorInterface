@@ -1,6 +1,7 @@
 #include <array>
 #include <chrono>
 #include <memory>
+#include <string>
 #include <thread>
 #include <cstring>
 #include <iostream>
@@ -43,7 +44,7 @@ namespace TalonStaticConfig
     static constexpr double kV = 0.12;
 
     static constexpr double DUTY_CYCLE_DEADBAND = 0.05;
-    static constexpr int NEUTRAL_MODE = ctre::phoenix6::signals::NeutralModeValue::Brake;
+    static constexpr int NEUTRAL_MODE = ctre::phoenix6::signals::NeutralModeValue::Coast;
 
     static constexpr phx6::configs::Slot0Configs
         SLOT0_CONFIG =
@@ -134,7 +135,13 @@ public:
             }) },
         fault_pub_timer{ this->create_wall_timer(250ms, [this](){ this->pub_motor_fault_cb(); }) }
     {
-        this->initSerial();
+        std::string arduino_device;
+        this->declare_parameter("arduino_device", "/dev/ttyACM0");
+        this->get_parameter("arduino_device", arduino_device);
+
+        RCLCPP_INFO(this->get_logger(), "Using arduino device path : %s", arduino_device.c_str());
+
+        this->initSerial(arduino_device.c_str());
         this->sendSerialPowerUp();
 
         RCLCPP_DEBUG(this->get_logger(), "Completed Phoenix6 Driver Node Initialization");
@@ -158,7 +165,7 @@ private:
         }
     }
 
-    void initSerial();
+    void initSerial(const char*);
     void sendSerialPowerDown();
     void sendSerialPowerUp();
     inline void closeSerial() { close(this->serial_port); }
@@ -260,9 +267,8 @@ TalonFaults& operator<<(TalonFaults& faults, TalonFX& m)
 }
 
 
-void Phoenix6Driver::initSerial()
+void Phoenix6Driver::initSerial(const char* port)
 {
-    const char* port = "/dev/ttyACM0";
     this->serial_port = open(port, O_RDWR | O_NOCTTY | O_SYNC);
 
     if(this->serial_port < 0)
@@ -304,10 +310,12 @@ void Phoenix6Driver::initSerial()
 
 void Phoenix6Driver::sendSerialPowerDown()
 {
+    RCLCPP_INFO(this->get_logger(), "Sending serial power down command...");
     write(this->serial_port, "0", 1);
 }
 void Phoenix6Driver::sendSerialPowerUp()
 {
+    RCLCPP_INFO(this->get_logger(), "Sending serial power up command...");
     write(this->serial_port, "1", 1);
 
     std::this_thread::sleep_for(TALONFX_BOOTUP_DELAY);
