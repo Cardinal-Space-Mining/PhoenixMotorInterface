@@ -73,11 +73,16 @@ namespace TalonStaticConfig
                 .WithSupplyCurrentLowerLimit(50_A)
                 .WithSupplyCurrentLowerTime(5_s);
 }
+namespace TalonRuntimeConfig
+{
+    static constexpr auto MOTOR_VELOCITY_SETPOINT_ACC = 5_tr_per_s_sq;
+};
 
 #define ROBOT_TOPIC(subtopic) "/lance/" subtopic
 #define TALON_CTRL_SUB_QOS 10
 #define ROBOT_CTRL_SUB_QOS 10
 
+#define MOTOR_STATUS_PUB_DT 50ms
 #define TALONFX_BOOTUP_DELAY 3s
 #define TALONFX_POWER_CYCLE_DELAY 1s
 
@@ -126,13 +131,16 @@ public:
                 rclcpp::SensorDataQoS{},
                 [this](const std_msgs::msg::Int32& msg){ this->feed_watchdog_status(msg.data); } )
         },
-        info_pub_timer{ this->create_wall_timer(100ms,
-            [this](){
-                this->pub_motor_info_cb();
-            #if HARD_ENABLE
-                this->feed_watchdog_status(250);
-            #endif
-            }) },
+        info_pub_timer
+        {
+            this->create_wall_timer(
+                MOTOR_STATUS_PUB_DT,
+                [this](){
+                    this->pub_motor_info_cb();
+                #if HARD_ENABLE
+                    this->feed_watchdog_status(250);
+                #endif
+                }) },
         fault_pub_timer{ this->create_wall_timer(250ms, [this](){ this->pub_motor_fault_cb(); }) }
     {
         std::string arduino_device;
@@ -423,7 +431,11 @@ void Phoenix6Driver::execute_ctrl_cb(TalonFX &motor, const TalonCtrl &msg)
             }
             case TalonCtrl::VELOCITY:
             {
-                motor.SetControl(phx6::controls::VelocityVoltage{ units::angular_velocity::turns_per_second_t{ msg.value } });
+                motor.SetControl(
+                    phx6::controls::VelocityVoltage{
+                        units::angular_velocity::turns_per_second_t{ msg.value },
+                        TalonRuntimeConfig::MOTOR_VELOCITY_SETPOINT_ACC,
+                        false } );
                 break;
             }
             case TalonCtrl::CURRENT:

@@ -13,7 +13,7 @@ using talon_msgs::msg::TalonCtrl;
 using talon_msgs::msg::TalonInfo;
 using JoyMsg = sensor_msgs::msg::Joy;
 
-struct MotorSettings
+struct MotorCommands
 {
     TalonCtrl track_right;
     TalonCtrl track_left;
@@ -74,7 +74,7 @@ public:
 
 public:
     bool update(
-        MotorSettings& settings,
+        MotorCommands& settings,
         const RobotMotorInfo& robot,
         const JoyMsg& ctrl );
 
@@ -84,15 +84,15 @@ private:
         const RobotMotorInfo& motor_info );
 
     bool runManualMode(
-        MotorSettings& settings,
+        MotorCommands& settings,
         const RobotMotorInfo& motor_info,
         const JoyMsg& ctrl );
     bool runTrenchCommand(
-        MotorSettings& settings,
+        MotorCommands& settings,
         const RobotMotorInfo& motor_info,
         const JoyMsg& ctrl );
     bool runOffloadCommand(
-        MotorSettings& settings,
+        MotorCommands& settings,
         const RobotMotorInfo& motor_info,
         const JoyMsg& ctrl );
 

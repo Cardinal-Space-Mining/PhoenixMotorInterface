@@ -1,0 +1,797 @@
+#include "robot.hpp"
+
+#include <array>
+#include <cmath>
+#include <ctime>
+#include <deque>
+#include <chrono>
+#include <iostream>
+#include <vector>
+#include <numeric>
+
+
+using system_time = std::chrono::system_clock;
+using system_time_point = system_time::time_point;
+
+static constexpr long double
+    PI = 3.14159265358979323846;
+
+namespace util {
+
+    inline double seconds_since(const system_time_point& tp)
+    {
+        return std::chrono::duration<double>{ system_time::now() - tp }.count();
+    }
+
+    frc::DifferentialDrive::WheelSpeeds computeWheelScalars(double x, double y, double mag_deadzone)
+    {
+        const double augmented_angle = std::atan2(x, y) + (PI / 4.0);	// x and y are inverted to make a CW "heading" angle
+        double magnitude = std::sqrt(x*x + y*y);
+        if (magnitude < mag_deadzone) return { 0.0, 0.0 };
+
+        return {
+            magnitude * std::sin(augmented_angle),
+            magnitude * std::cos(augmented_angle)		// this is the same as cos("raw theta" - pi/4) like from the original code
+        };
+    }
+}
+
+
+
+void RobotControl::State::reset_auto_states()
+{
+    this->mining.enabled = false;
+    this->offload.enabled = false;
+    this->mining.stage = RobotControl::State::MiningStage::FINISHED;
+    this->offload.stage = RobotControl::State::OffloadingStage::FINISHED;
+}
+
+bool RobotControl::State::mining_is_soft_shutdown()
+{
+    switch(this->control_level)
+    {
+        case RobotControl::State::ControlLevel::ASSISTED_MANUAL:
+        case RobotControl::State::ControlLevel::FULL_AUTO:
+        {
+            return this->mining.cancelled;
+        }
+        case RobotControl::State::ControlLevel::MANUAL:
+        case RobotControl::State::ControlLevel::TELEAUTO_OP:
+        default:
+        {
+            return false;
+        }
+    }
+}
+
+bool RobotControl::State::offload_is_soft_shutdown()
+{
+    switch(this->control_level)
+    {
+        case RobotControl::State::ControlLevel::ASSISTED_MANUAL:
+        case RobotControl::State::ControlLevel::FULL_AUTO:
+        {
+            return this->offload.cancelled;
+        }
+        case RobotControl::State::ControlLevel::MANUAL:
+        case RobotControl::State::ControlLevel::TELEAUTO_OP:
+        default:
+        {
+            return false;
+        }
+    }
+}
+
+void RobotControl::State::handle_change_control_level(RobotControl::State::ControlLevel new_level)
+{
+    switch(this->control_level)	// make this more sophisticated in the future
+    {
+        case RobotControl::State::ControlLevel::MANUAL:
+        case RobotControl::State::ControlLevel::ASSISTED_MANUAL:
+        {
+            this->last_manual_control_level = this->control_level;
+            this->control_level = new_level;
+            break;
+        }
+        case RobotControl::State::ControlLevel::TELEAUTO_OP:
+        case RobotControl::State::ControlLevel::FULL_AUTO:
+        {
+            this->control_level = new_level;
+            break;
+        }
+        default: {}
+    }
+}
+
+// void RobotControl::State::InitSendable(wpi::SendableBuilder& builder)
+// {
+// 	static const char* CONTROL_LEVEL_NAMES[] = {
+// 		"Manual",
+// 		"Assisted Manual",
+// 		"Teleauto Operation",
+// 		"Full Auto"
+// 	};
+// 	static const char* MINING_STAGE_NAMES[] = {
+// 		"Initializing",
+// 		"Lowering Hopper",
+// 		"Traversing",
+// 		"Raising Hopper",
+// 		"Finished"
+// 	};
+// 	static const char* OFFLOAD_STAGE_NAMES[] = {
+// 		"Initializing",
+// 		"Backing Up",
+// 		"Raising Hopper",
+// 		"Offloading",
+// 		"Lowering Hopper",
+// 		"Finished"
+// 	};
+
+// 	builder.AddBooleanProperty("state/mining_enabled", [this](){return this->mining.enabled;}, nullptr);
+// 	builder.AddBooleanProperty("state/mining_cancelled", [this](){return this->mining.cancelled;}, nullptr);
+// 	builder.AddBooleanProperty("state/offload_enabled", [this](){return this->offload.enabled;}, nullptr);
+// 	builder.AddBooleanProperty("state/offload_cancelled", [this](){return this->offload.cancelled;}, nullptr);
+// 	// builder.AddIntegerProperty("state/mining_stage", [this](){return static_cast<int>(this->mining.stage);}, nullptr);
+// 	// builder.AddIntegerProperty("state/offload_stage", [this](){return static_cast<int>(this->offload.stage);}, nullptr);
+// 	// builder.AddIntegerProperty("state/mining_serial_control_state", [this](){return static_cast<int>(this->mining.serial_control);}, nullptr);
+// 	// builder.AddIntegerProperty("state/offload_serial_control_state", [this](){return static_cast<int>(this->offload.serial_control);}, nullptr);
+// 	// builder.AddIntegerProperty("state/control_level", [this](){return static_cast<int>(this->control_level);}, nullptr);
+
+// 	builder.AddDoubleProperty("state/driving_speed_scalar", [this](){return this->driving_speed_scalar;}, nullptr);
+// 	builder.AddDoubleProperty("tuning/mining_runtime", [this](){return this->mining.target_mining_time;}, [this](double v){this->mining.target_mining_time = v;});
+// 	builder.AddDoubleProperty("tuning/tele_offload_backup_time", [this](){return this->offload.tele_target_backup_time;}, [this](double v){this->offload.tele_target_backup_time = v;});
+// 	builder.AddDoubleProperty("tuning/auto_offload_backup_time", [this](){return this->offload.auto_target_backup_time;}, [this](double v){this->offload.auto_target_backup_time = v;});
+// 	builder.AddDoubleProperty("tuning/offload_dump_time", [this](){return this->offload.target_dump_time;}, [this](double v){this->offload.target_dump_time = v;});
+
+// 	builder.AddStringProperty("state/control_level", [this](){return CONTROL_LEVEL_NAMES[static_cast<int>(this->control_level)];}, nullptr);
+// 	builder.AddStringProperty("state/mining_stage", [this](){return MINING_STAGE_NAMES[static_cast<int>(this->mining.stage)];}, nullptr);
+// 	builder.AddStringProperty("state/offload_stage", [this](){return OFFLOAD_STAGE_NAMES[static_cast<int>(this->offload.stage)];}, nullptr);
+// };
+
+
+
+RobotControl::RobotControl() {}
+RobotControl::~RobotControl() {}
+
+
+// ------------ TELEMETRY ---------------
+
+// void RobotControl::InitSendable(wpi::SendableBuilder& builder)
+// {
+//     util::add_fx6_dbg_info(builder, track_right, "TrackRight");
+//     util::add_fx6_dbg_info(builder, track_left, "TrackLeft");
+//     util::add_fx6_dbg_info(builder, trencher, "Trencher");
+//     util::add_fx6_dbg_info(builder, hopper_belt, "HopperBelt");
+//     util::add_srx_dbg_info(builder, hopper_actuator, "HopperActuator");
+//     builder.AddDoubleProperty("HopperActuator/potentiometer", [this](){ return this->get_hopper_pot(); }, nullptr);
+//     builder.AddBooleanProperty("state/serial_enabled", [this](){return this->serial.enabled;}, nullptr);
+
+//     this->state.InitSendable(builder);
+// }
+
+
+// --------- Setup/Helpers ----------
+
+// void RobotControl::configure_motors()
+// {
+//     configs::TalonFXConfiguration generic_config{}/*, tracks_config{}*/;
+
+//     /* Voltage-based velocity requires a feed forward to account for the back-emf of the motor */
+//     generic_config.Slot0.kP = RobotControl::GENERIC_MOTOR_kP;
+//     generic_config.Slot0.kI = RobotControl::GENERIC_MOTOR_kI;
+//     generic_config.Slot0.kD = RobotControl::GENERIC_MOTOR_kD;
+//     generic_config.Slot0.kV = RobotControl::GENERIC_MOTOR_kV;
+//     generic_config.MotorOutput.NeutralMode = ctre::phoenix6::signals::NeutralModeValue::Brake;
+
+//     // tracks_config.CurrentLimits.StatorCurrentLimitEnable = false;
+//     generic_config.CurrentLimits.StatorCurrentLimitEnable = false;
+
+//     this->track_left.GetConfigurator().Apply(generic_config);
+//     this->track_right.GetConfigurator().Apply(generic_config);
+
+//     this->hopper_belt.GetConfigurator().Apply(generic_config);
+//     this->trencher.GetConfigurator().Apply(generic_config);
+
+//     this->hopper_actuator.EnableCurrentLimit(false);
+
+//     this->trencher.SetInverted(true);
+//     this->hopper_belt.SetInverted(false);
+//     this->track_right.SetInverted(true);
+// }
+
+void RobotControl::disable_motors()
+{
+    this->track_right.Set(0);
+    this->track_left.Set(0);
+    this->trencher.Set(0);
+    this->hopper_belt.Set(0);
+    this->hopper_actuator.Set(0);
+}
+
+void RobotControl::stop_all()
+{
+    this->state.reset_auto_states();
+    this->disable_motors();
+}
+
+
+// double RobotControl::get_hopper_pot()
+// {
+//     if constexpr(this->IsReal())
+//         return this->hopper_actuator_pot.Get();
+//     else
+//         return this->sim.hopper_actuator_position;
+// }
+
+
+
+// ------------- Mining/Offload init and shutdown --------------
+
+void RobotControl::start_mining(RobotControl::State::ControlLevel op_level)
+{
+    this->state.handle_change_control_level(op_level);
+    if( !this->state.mining.enabled && !this->state.offload.enabled &&
+        this->state.control_level != RobotControl::State::ControlLevel::MANUAL)
+    {
+        this->stop_all();
+
+        this->state.mining.enabled = true;
+        this->state.mining.cancelled = false;
+        this->state.mining.stage = RobotControl::State::MiningStage::INITIALIZING;
+    }
+}
+
+void RobotControl::cancel_mining()
+{
+    if (this->state.mining.enabled && !this->state.offload.enabled)
+    {
+        switch(this->state.control_level)
+        {
+            case RobotControl::State::ControlLevel::ASSISTED_MANUAL:
+            case RobotControl::State::ControlLevel::FULL_AUTO:
+            {
+                this->state.mining.cancelled = true;	// trigger automated exit
+                break;
+            }
+            case RobotControl::State::ControlLevel::MANUAL:
+            case RobotControl::State::ControlLevel::TELEAUTO_OP:
+            default:
+            {
+                this->stop_all();			// hard stop... and reset all states
+
+                this->state.mining.enabled = false;
+                this->state.mining.stage = RobotControl::State::MiningStage::FINISHED;
+            }
+        }
+    }
+}
+
+void RobotControl::start_offload(RobotControl::State::ControlLevel op_level)
+{
+    this->state.handle_change_control_level(op_level);
+    if( !this->state.mining.enabled && !this->state.offload.enabled &&
+        this->state.control_level != RobotControl::State::ControlLevel::MANUAL)
+    {
+        this->stop_all();
+
+        this->state.offload.enabled = true;
+        this->state.offload.cancelled = false;
+        this->state.offload.stage = RobotControl::State::OffloadingStage::INITIALIZING;
+    }
+}
+
+void RobotControl::cancel_offload()
+{
+    if(this->state.offload.enabled && !this->state.mining.enabled)
+    {
+        switch(this->state.control_level)
+        {
+            case RobotControl::State::ControlLevel::ASSISTED_MANUAL:
+            case RobotControl::State::ControlLevel::FULL_AUTO:
+            {
+                this->state.offload.cancelled = true;	// trigger automated exit
+                break;
+            }
+            case RobotControl::State::ControlLevel::MANUAL:
+            case RobotControl::State::ControlLevel::TELEAUTO_OP:
+            default:
+            {
+                this->stop_all();			// hard stop... and reset all states
+
+                this->state.offload.enabled = false;
+                this->state.offload.stage = RobotControl::State::OffloadingStage::FINISHED;
+            }
+        }
+    }
+}
+
+
+
+
+
+// ----------------- Periodic Handlers ----------------------
+
+void RobotControl::periodic_handle_mining()
+{
+    if(this->state.mining.enabled) {
+        const bool cancelled = this->state.mining_is_soft_shutdown();
+
+        switch(this->state.mining.stage) {
+            case RobotControl::State::MiningStage::INITIALIZING:
+            {
+                this->state.mining.stage = RobotControl::State::MiningStage::LOWERING_HOPPER;
+                // fallthrough to process the next stage
+            }
+            case RobotControl::State::MiningStage::LOWERING_HOPPER:
+            {
+                const double pot_val = this->get_hopper_pot();
+                if(!cancelled && pot_val > RobotControl::MINING_DEPTH_NOMINAL_POT_VALUE)
+                {
+                    // set trencher
+                    this->trencher.SetControl(
+                        ctre::phoenix6::controls::VelocityVoltage{
+                            RobotControl::TRENCHER_NOMINAL_MINING_VELO,
+                            RobotControl::MOTOR_SETPOINT_ACC,
+                            false
+                        }
+                    );
+                    // set actuator
+                    if(pot_val > RobotControl::TRAVERSAL_POT_VALUE)
+                        this->hopper_actuator.Set(RobotControl::HOPPER_ACUTATOR_MOVE_SPEED);
+                    else
+                        this->hopper_actuator.Set(RobotControl::HOPPER_ACTUATOR_PLUNGE_SPEED);
+
+                    break;
+                }
+                else
+                {
+                    this->hopper_actuator.Set(0);
+                    this->state.mining.traversal_start_time = system_time::now();
+                    this->state.mining.stage = RobotControl::State::MiningStage::TRAVERSING;
+                    // allow fallthrough bc we might as well start processing traversal
+                }
+            }
+            case RobotControl::State::MiningStage::TRAVERSING:
+            {
+                if( !cancelled && (this->state.control_level == RobotControl::State::ControlLevel::ASSISTED_MANUAL ||
+                    util::seconds_since(this->state.mining.traversal_start_time) < this->state.mining.target_mining_time))
+                {
+                    auto trencher_setpt = RobotControl::TRENCHER_NOMINAL_MINING_VELO;
+                    auto tracks_setpt = RobotControl::TRACKS_MINING_VELO;
+                    // handle manual adjustments
+                    if(this->state.control_level == RobotControl::State::ControlLevel::ASSISTED_MANUAL)
+                    {
+                        // adjust trencher speed (slows down)
+                        {
+                            const double adjustment_raw =
+                                frc::ApplyDeadband(
+                                    this->logitech.GetRawAxis(RobotControl::TELEOP_TRENCHER_SPEED_AXIS_IDX),
+                                    RobotControl::GENERIC_DEADZONE_SCALAR
+                                );
+
+                            trencher_setpt = RobotControl::TRENCHER_NOMINAL_MINING_VELO * (1.0 - adjustment_raw);
+                        }
+                        // adjust trencher depth with right stick -- WARNING: DEPENDS ON POTENTIOMENTER
+                        {
+                            double target_depth = RobotControl::MINING_DEPTH_NOMINAL_POT_VALUE;
+                            const double adjustment_raw =
+                                frc::ApplyDeadband(
+                                    -this->logitech.GetRawAxis(RobotControl::TELEOP_HOPPER_ACTUATE_AXIS_IDX),
+                                    RobotControl::GENERIC_DEADZONE_SCALAR
+                                );
+
+                            if(adjustment_raw > 0.0)
+                                target_depth += (RobotControl::AUTO_TRANSPORT_POT_VALUE - RobotControl::MINING_DEPTH_NOMINAL_POT_VALUE) * adjustment_raw;
+                            if(adjustment_raw < 0.0)
+                                target_depth += (RobotControl::MINING_DEPTH_NOMINAL_POT_VALUE - RobotControl::MINING_DEPTH_LIMIT_POT_VALUE) * adjustment_raw;
+
+                            // servo based on target
+                            const double pot_val = this->get_hopper_pot();
+                            if(std::abs(target_depth - pot_val) < RobotControl::HOPPER_POT_TARGETING_EPSILON)	// in range
+                                this->hopper_actuator.Set(0);
+                            else if(pot_val < target_depth)
+                                this->hopper_actuator.Set(-RobotControl::HOPPER_ACTUATOR_PLUNGE_SPEED);	// negative speed to go up (obviously we should just invert the controller but I just don't want to break anything at this point)
+                            else if(pot_val > target_depth)
+                                this->hopper_actuator.Set(RobotControl::HOPPER_ACTUATOR_PLUNGE_SPEED);		// positive speed to go down
+                        }
+                        // adjust tracks speed
+                        {
+                            const double adjustment_raw =
+                                frc::ApplyDeadband(
+                                    -this->logitech.GetRawAxis(RobotControl::TELEOP_DRIVE_Y_AXIS_IDX),
+                                    RobotControl::DRIVING_MAGNITUDE_DEADZONE_SCALAR
+                                );
+
+                            if(adjustment_raw > 0.0)
+                                tracks_setpt += (RobotControl::TRACKS_MAX_ADDITIONAL_MINING_VEL * adjustment_raw);
+                            if(adjustment_raw < 0.0)
+                                tracks_setpt += (RobotControl::TRACKS_MINING_VELO * adjustment_raw);
+                        }
+                    }
+
+                    // set trencher
+                    this->trencher.SetControl(
+                        ctre::phoenix6::controls::VelocityVoltage{
+                            trencher_setpt,
+                            RobotControl::MOTOR_SETPOINT_ACC,
+                            false
+                        }
+                    );
+
+                    // handle hopper duty cycle -- scaled by trencher relative velocity --> did not work :(
+                    // const double trencher_percent = trencher_setpt / RobotControl::TRENCHER_NOMINAL_MINING_VELO;
+                    // if( trencher_percent != 0.0 && RobotControl::HOPPER_BELT_TIME_ON_SECONDS > std::abs(
+                    // 		std::fmod( util::seconds_since(state.offload.start_time), (RobotControl::HOPPER_BELT_TIME_ON_SECONDS / trencher_percent) + RobotControl::HOPPER_BELT_TIME_OFF_SECONDS)) )
+                    if( RobotControl::HOPPER_BELT_TIME_ON_SECONDS * (trencher_setpt / RobotControl::TRENCHER_NOMINAL_MINING_VELO) >
+                        std::abs(std::fmod( util::seconds_since(state.offload.start_time), RobotControl::HOPPER_BELT_TIME_ON_SECONDS + RobotControl::HOPPER_BELT_TIME_OFF_SECONDS)) )
+                    {
+                        ctre::phoenix6::controls::VelocityVoltage
+                        vel_command{
+                            -RobotControl::HOPPER_BELT_MAX_MINING_VELO,
+                            RobotControl::MOTOR_SETPOINT_ACC,
+                            false
+                        };
+                        this->hopper_belt.SetControl(vel_command);
+                    }
+                    else this->hopper_belt.Set(0);
+
+                    // set tracks
+                    ctre::phoenix6::controls::VelocityVoltage
+                        vel_command{
+                            tracks_setpt,
+                            RobotControl::MOTOR_SETPOINT_ACC,
+                            false
+                        };
+                    this->track_left.SetControl(vel_command);
+                    this->track_right.SetControl(vel_command);
+
+                    break;
+                }
+                else
+                {
+                    this->track_left.Set(0);
+                    this->track_right.Set(0);
+                    this->hopper_belt.Set(0);
+                    this->state.mining.stage = RobotControl::State::MiningStage::RAISING_HOPPER;
+                    // allow fallthrough
+                }
+            }
+            case RobotControl::State::MiningStage::RAISING_HOPPER:
+            {
+                const double pot_val = this->get_hopper_pot();
+                if(pot_val < RobotControl::AUTO_TRANSPORT_POT_VALUE)
+                {
+                    // set trencher
+                    this->trencher.SetControl(
+                        ctre::phoenix6::controls::VelocityVoltage{
+                            RobotControl::TRENCHER_NOMINAL_MINING_VELO,
+                            RobotControl::MOTOR_SETPOINT_ACC,
+                            false
+                        }
+                    );
+                    // set actuator
+                    this->hopper_actuator.Set(-RobotControl::HOPPER_ACTUATOR_EXTRACT_SPEED);
+                    break;
+                }
+                else
+                {
+                    this->hopper_actuator.Set(0);
+                    this->state.mining.stage = RobotControl::State::MiningStage::FINISHED;
+                    // fallthrough to call shutdown
+                }
+            }
+            case RobotControl::State::MiningStage::FINISHED:
+            {
+                this->stop_all();
+                this->state.mining.enabled = false;
+                this->state.handle_change_control_level(RobotControl::State::ControlLevel::MANUAL);	// TODO: needs to change for full auto?
+            }
+            default:
+            {
+                // nothing
+            }
+        }
+    }
+}
+
+void RobotControl::periodic_handle_offload()
+{
+    if(this->state.offload.enabled) {
+        const bool
+            is_full_auto = this->state.control_level == RobotControl::State::ControlLevel::FULL_AUTO,
+            is_assisted = this->state.control_level == RobotControl::State::ControlLevel::ASSISTED_MANUAL,
+            cancelled = this->state.offload_is_soft_shutdown();
+
+        // control the tracks manually if in auto assist
+        if(is_assisted)
+        {
+            // control tracks
+            ctre::phoenix6::controls::VelocityVoltage
+                vel_command{
+                    (RobotControl::TRACKS_MAX_VELO * RobotControl::DRIVING_LOW_SPEED_SCALAR * this->state.driving_speed_scalar) *
+                        frc::ApplyDeadband(
+                            -this->logitech.GetRawAxis(RobotControl::TELEOP_DRIVE_Y_AXIS_IDX),
+                            RobotControl::DRIVING_MAGNITUDE_DEADZONE_SCALAR
+                        ),
+                    RobotControl::MOTOR_SETPOINT_ACC,
+                    false
+                };
+
+            this->track_right.SetControl(vel_command);
+            this->track_left.SetControl(vel_command);
+        }
+
+        switch(this->state.offload.stage) {
+            case RobotControl::State::OffloadingStage::INITIALIZING:
+            {
+                this->state.offload.start_time = system_time::now();
+                this->state.offload.stage = RobotControl::State::OffloadingStage::BACKING_UP;
+                // fallthrough
+            }
+            case RobotControl::State::OffloadingStage::BACKING_UP:
+            {
+                if(!is_assisted)
+                {
+                    const double duration = util::seconds_since(this->state.offload.start_time);
+                    if( !cancelled &&
+                        (is_full_auto && duration < this->state.offload.auto_target_backup_time) ||
+                        (!is_full_auto && duration < this->state.offload.tele_target_backup_time) )		// use serial_control state for this if deemed reliable enough
+                    {
+                        // drive backwards
+                        ctre::phoenix6::controls::VelocityVoltage
+                            vel_command{
+                                -RobotControl::TRACKS_OFFLOAD_VELO,
+                                RobotControl::MOTOR_SETPOINT_ACC,
+                                false
+                            };
+                        track_left.SetControl(vel_command);
+                        track_right.SetControl(vel_command);
+
+                        break;
+                    }
+                    else
+                    {
+                        track_left.Set(0);
+                        track_right.Set(0);
+                        // fallthrough to apply next stage
+                    }
+                }
+                this->state.offload.stage = RobotControl::State::OffloadingStage::RAISING_HOPPER;
+                // fallthrough and process the next stage
+            }
+            case RobotControl::State::OffloadingStage::RAISING_HOPPER:
+            {
+                if(!cancelled && this->get_hopper_pot() < RobotControl::OFFLOAD_POT_VALUE)
+                {
+                    this->hopper_actuator.Set(-RobotControl::HOPPER_ACUTATOR_MOVE_SPEED);	// dump
+                    break;
+                }
+                else
+                {
+                    this->hopper_actuator.Set(0);
+                    this->state.offload.dump_start_time = system_time::now();
+                    this->state.offload.stage = RobotControl::State::OffloadingStage::OFFLOADING;
+                    // fallthrough
+                }
+            }
+            case RobotControl::State::OffloadingStage::OFFLOADING:
+            {
+                if(!cancelled && util::seconds_since(this->state.offload.dump_start_time) < this->state.offload.target_dump_time)
+                {
+                    // set hopper belt
+                    this->hopper_belt.SetControl(
+                        ctre::phoenix6::controls::VelocityVoltage{
+                            -RobotControl::HOPPER_BELT_MAX_VELO,
+                            RobotControl::MOTOR_SETPOINT_ACC,
+                            false
+                        }
+                    );
+                    break;
+                }
+                else
+                {
+                    this->hopper_belt.Set(0);
+                    this->state.offload.stage = RobotControl::State::OffloadingStage::LOWERING_HOPPER;
+                    // fallthrough
+                }
+            }
+            case RobotControl::State::OffloadingStage::LOWERING_HOPPER:
+            {
+                if(this->get_hopper_pot() > RobotControl::TRAVERSAL_POT_VALUE)
+                {
+                    this->hopper_actuator.Set(RobotControl::HOPPER_ACUTATOR_MOVE_SPEED);
+                    break;
+                }
+                else
+                {
+                    this->hopper_actuator.Set(0);
+                    this->state.offload.stage = RobotControl::State::OffloadingStage::FINISHED;
+                    // fallthrough
+                }
+            }
+            case RobotControl::State::OffloadingStage::FINISHED:
+            {
+                this->stop_all();
+                this->state.offload.enabled = false;
+                this->state.handle_change_control_level(RobotControl::State::ControlLevel::MANUAL);	// TODO: needs to change for full auto?
+            }
+            default:
+            {
+                // nothing
+            }
+        }
+    }
+}
+
+
+
+void RobotControl::periodic_handle_teleop_input()
+{
+    // speed changes -- these don't affect autos so we can run them during every loop to make it as intuitive as possible
+    {
+        if(logitech.GetRawButtonPressed(RobotControl::TELEOP_LOW_SPEED_BUTTON_IDX))
+            this->state.driving_speed_scalar = RobotControl::DRIVING_LOW_SPEED_SCALAR;
+        if(logitech.GetRawButtonPressed(RobotControl::TELEOP_MEDIUM_SPEED_BUTTON_IDX))
+            this->state.driving_speed_scalar = RobotControl::DRIVING_MEDIUM_SPEED_SCALAR;
+        if(logitech.GetRawButtonPressed(RobotControl::TELEOP_HIGH_SPEED_BUTTON_IDX))
+            this->state.driving_speed_scalar = RobotControl::DRIVING_HIGH_SPEED_SCALAR;
+    }
+
+    // ------------ HARD RESET ------------
+    if( logitech.GetRawButton(RobotControl::DISABLE_ALL_ACTIONS_BUTTON_IDX) /*||
+        logitech.GetRawButtonPressed(RobotControl::DISABLE_ALL_ACTIONS_BUTTON_IDX)*/)	// little sus but should handle all presses
+    {
+        this->stop_all();	// gets called later
+        this->state.control_level = RobotControl::State::ControlLevel::MANUAL;
+        this->state.last_manual_control_level = this->state.control_level;
+        this->cancel_mining();
+        this->cancel_offload();
+        return;
+        // this->disable_serial();	// resets internal serial_control states
+    }
+
+    const bool
+        is_mining = this->state.mining.enabled,
+        is_offload = this->state.offload.enabled,
+        any_ops_running = is_mining || is_offload,
+        is_teleauto = this->state.control_level == RobotControl::State::ControlLevel::TELEAUTO_OP;
+
+    // ---------- TELEAUTO CONTROl ----------
+    {
+        if(!any_ops_running && logitech.GetPOV(0) == RobotControl::TELEAUTO_MINING_INIT_POV) {		// dpad top
+            this->start_mining(RobotControl::State::ControlLevel::TELEAUTO_OP);
+        } else
+        if(is_teleauto && is_mining && logitech.GetPOV(0) == RobotControl::TELEAUTO_MINING_STOP_POV) {	// dpad bottom
+            this->cancel_mining();
+        } else
+        if(!any_ops_running && logitech.GetPOV(0) == RobotControl::TELEAUTO_OFFLOAD_INIT_POV) {	// dpad right
+            this->start_offload(RobotControl::State::ControlLevel::TELEAUTO_OP);
+        } else
+        if(is_teleauto && is_offload && logitech.GetPOV(0) == RobotControl::TELEAUTO_OFFLOAD_STOP_POV) {	// dpad left
+            this->cancel_mining();
+        }
+    }
+
+    // -------------- ASSISTED CONTROL ------------
+    if(logitech.GetRawButtonPressed(RobotControl::ASSISTED_MINING_TOGGLE_BUTTON_IDX) && !this->state.offload.enabled)
+    {
+        if(this->state.mining.enabled)
+        {
+            if(this->state.control_level == RobotControl::State::ControlLevel::ASSISTED_MANUAL)
+                this->cancel_mining();
+        }
+        else this->start_mining(RobotControl::State::ControlLevel::ASSISTED_MANUAL);
+    } else
+    if(logitech.GetRawButtonPressed(RobotControl::ASSISTED_OFFLOAD_TOGGLE_BUTTON_IDX) && !this->state.mining.enabled)
+    {
+        if(this->state.offload.enabled)
+        {
+            if(this->state.control_level == RobotControl::State::ControlLevel::ASSISTED_MANUAL)
+                this->cancel_offload();
+        }
+        else this->start_offload(RobotControl::State::ControlLevel::ASSISTED_MANUAL);
+    }
+
+    if(this->state.mining.enabled || this->state.offload.enabled) return;
+
+    // ------- DRIVE CONTROL ------------
+    {
+        ctre::phoenix6::controls::VelocityVoltage
+            vel_command{ 0_tps, RobotControl::MOTOR_SETPOINT_ACC, false };
+        const double
+            stick_x = logitech.GetRawAxis(RobotControl::TELEOP_DRIVE_X_AXIS_IDX),
+            stick_y = -logitech.GetRawAxis(RobotControl::TELEOP_DRIVE_Y_AXIS_IDX);	// forward y is positive
+
+        auto track_speeds = util::computeWheelScalars(stick_x, stick_y, RobotControl::DRIVING_MAGNITUDE_DEADZONE_SCALAR);
+
+        // set drive velocities
+        track_right.SetControl(
+            vel_command.WithVelocity(
+                RobotControl::TRACKS_MAX_VELO * this->state.driving_speed_scalar * track_speeds.right
+            ));
+        track_left.SetControl(
+            vel_command.WithVelocity(
+                RobotControl::TRACKS_MAX_VELO * this->state.driving_speed_scalar * track_speeds.left
+            ));
+    }
+    // ------------ TRENCHER CONTROL -------------
+    {
+        double trencher_speed = logitech.GetRawAxis(RobotControl::TELEOP_TRENCHER_SPEED_AXIS_IDX);
+        if (logitech.GetRawButton(RobotControl::TELEOP_TRENCHER_INVERT_BUTTON_IDX)) trencher_speed *= -1.0;
+
+        // set trencher velocity
+        trencher.SetControl(
+            ctre::phoenix6::controls::VelocityVoltage{
+                (RobotControl::TRENCHER_MAX_VELO * trencher_speed),
+                RobotControl::MOTOR_SETPOINT_ACC,
+                false
+            }
+        );
+    }
+    // ------------- HOPPER CONTROL --------------
+    {
+        double hopper_belt_speed = -logitech.GetRawAxis(RobotControl::TELEOP_HOPPER_SPEED_AXIS_IDX);
+        if (logitech.GetRawButton(RobotControl::TELEOP_HOPPER_INVERT_BUTTON_IDX)) hopper_belt_speed *= -1.0;
+
+        // set hopper belt
+        hopper_belt.SetControl(
+            ctre::phoenix6::controls::VelocityVoltage{
+                (RobotControl::HOPPER_BELT_MAX_VELO * hopper_belt_speed),
+                RobotControl::MOTOR_SETPOINT_ACC,
+                false
+            }
+        );
+        // set actutor power
+        hopper_actuator.Set(
+            frc::ApplyDeadband(logitech.GetRawAxis(RobotControl::TELEOP_HOPPER_ACTUATE_AXIS_IDX), RobotControl::GENERIC_DEADZONE_SCALAR)
+        );
+    }
+}
+
+
+
+
+
+// -------------- TimedRobot Overrides --------------
+
+// void RobotControl::RobotPeriodic()
+// {
+//     // run periodic control
+//     this->periodic_handle_mining();
+//     this->periodic_handle_offload();
+
+//     // this->telemetry_sender.updateValues();
+// }
+
+
+// void RobotControl::AutonomousInit()
+// {
+//     this->stop_all();
+//     this->serial.enabled = true;
+//     this->state.control_level = RobotControl::State::ControlLevel::FULL_AUTO;
+// }
+
+
+// void RobotControl::TeleopInit()
+// {
+//     this->stop_all();
+//     // this->disable_serial();
+//     this->state.control_level = this->state.last_manual_control_level;
+// }
+
+// void RobotControl::TeleopPeriodic()
+// {
+//     this->periodic_handle_teleop_input();
+// }
+
+// void RobotControl::TeleopExit()
+// {
+//     this->state.last_manual_control_level = this->state.control_level;
+// }
+
+
+// void RobotControl::DisabledInit()
+// {
+//     this->stop_all();
+//     // this->disable_serial();
+// }

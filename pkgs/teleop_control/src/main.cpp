@@ -7,7 +7,7 @@
 #include <std_msgs/msg/int32.hpp>
 #include <sensor_msgs/msg/joy.hpp>
 
-#include "teleop_control/states.hpp"
+#include "states.hpp"
 
 
 #ifndef ENABLE_HEARTBEAT_PUB
@@ -43,7 +43,14 @@ public:
             this->create_subscription<sensor_msgs::msg::Joy>(
                 "/joy",
                 rclcpp::SensorDataQoS{},
-                [this](const sensor_msgs::msg::Joy &joy){ this->joy = joy; })
+                [this](const sensor_msgs::msg::Joy& joy){ this->joy = joy; } )
+        },
+        watchdog_sub
+        {
+            this->create_subscription<std_msgs::msg::Int32>(
+                ROBOT_TOPIC("watchdog_status"),
+                rclcpp::SensorDataQoS{},
+                [this](const std_msgs::msg::Int32& status){ this->status = status.data; } )
         },
         teleop_update_timer{
             this->create_wall_timer(MOTOR_UPDATE_DT, [this](){ this->update_motors(); }) }
@@ -52,8 +59,8 @@ public:
 private:
     inline void update_motors()
     {
-        MotorSettings motor_settings;   // TODO: set disable states correctly
-        this->teleop_state.update(motor_settings, this->robot_state, this->joy);
+        MotorCommands motor_settings;   // TODO: set disable states correctly
+        this->teleop_state.update(motor_settings, this->robot_status, this->joy);
 
         this->track_right_ctrl->publish(motor_settings.track_right);
         this->track_left_ctrl->publish(motor_settings.track_left);
@@ -72,12 +79,15 @@ private:
 
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr
         joy_sub;
+    rclcpp::Subscription<sensor_msgs::msg::Int32>::SharedPtr
+        watchdog_sub;
     rclcpp::TimerBase::SharedPtr
         teleop_update_timer;
 
     TeleopStateMachine teleop_state;
-    RobotMotorInfo robot_state;
+    RobotMotorInfo robot_status;
     sensor_msgs::msg::Joy joy;
+    int32_t status{ 0 };
 
 };
 

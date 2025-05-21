@@ -16,15 +16,15 @@ add_executable(main src/main.cpp src/states.cpp)
 
 ament_target_dependencies(main rclcpp sensor_msgs std_msgs talon_msgs)
 
-target_include_directories(main PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include)
+# target_include_directories(main PUBLIC
+#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#     $<INSTALL_INTERFACE:include)
 
 target_compile_features(main PUBLIC c_std_99 cxx_std_20)
 
 install(TARGETS
     main
-    DESTINATION lib/${PROJECT_NAME})
+    DESTINATION lib/${PROJECT_NAME} )
 
 install(DIRECTORY
     launch

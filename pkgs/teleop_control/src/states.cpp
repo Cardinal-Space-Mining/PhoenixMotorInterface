@@ -48,7 +48,7 @@ namespace
 
 
 bool TeleopStateMachine::update(
-    MotorSettings& settings,
+    MotorCommands& settings,
     const RobotMotorInfo& motor_info,
     const JoyMsg& ctrl )
 {
@@ -113,7 +113,7 @@ void TeleopStateMachine::setControlMode(RobotControlMode state, const RobotMotor
 }
 
 bool TeleopStateMachine::runManualMode(
-    MotorSettings& settings,
+    MotorCommands& settings,
     const RobotMotorInfo& motor_info,
     const JoyMsg& ctrl )
 {
@@ -227,7 +227,7 @@ bool TeleopStateMachine::runManualMode(
 }
 
 bool TeleopStateMachine::runTrenchCommand(
-    MotorSettings& settings,
+    MotorCommands& settings,
     const RobotMotorInfo& motor_info,
     const JoyMsg& ctrl )
 {
@@ -313,7 +313,7 @@ bool TeleopStateMachine::runTrenchCommand(
 }
 
 bool TeleopStateMachine::runOffloadCommand(
-    MotorSettings& settings,
+    MotorCommands& settings,
     const RobotMotorInfo& motor_info,
     const JoyMsg& ctrl )
 {
