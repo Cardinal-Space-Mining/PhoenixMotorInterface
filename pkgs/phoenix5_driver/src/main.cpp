@@ -81,6 +81,7 @@ public:
         this->hopper_actuator.Config_kF(0, TalonStaticConfig::DEFAULT_GAINS.F);
         this->hopper_actuator.SetNeutralMode(NeutralMode::Brake);
         this->hopper_actuator.ConfigNeutralDeadband(5.);
+	this->hopper_actuator.ConfigSelectedFeedbackSensor(TalonSRXFeedbackDevice::Analog);
         this->hopper_actuator.ClearStickyFaults();
 
         RCLCPP_DEBUG(this->get_logger(), "Completed Phoenix5 Driver Node Initialization");
