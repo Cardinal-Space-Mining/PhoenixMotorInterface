@@ -1,7 +1,13 @@
 #include <array>
 #include <chrono>
 #include <memory>
+#include <thread>
+#include <cstring>
 #include <iostream>
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <termios.h>
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/int8.hpp>
@@ -71,6 +77,9 @@ namespace TalonStaticConfig
 #define TALON_CTRL_SUB_QOS 10
 #define ROBOT_CTRL_SUB_QOS 10
 
+#define TALONFX_BOOTUP_DELAY 3s
+#define TALONFX_POWER_CYCLE_DELAY 1s
+
 
 class Phoenix6Driver :
     public rclcpp::Node
@@ -125,10 +134,17 @@ public:
             }) },
         fault_pub_timer{ this->create_wall_timer(250ms, [this](){ this->pub_motor_fault_cb(); }) }
     {
-        this->configure_motors_cb();
-        this->neutralAll();
+        this->initSerial();
+        this->sendSerialPowerUp();
 
         RCLCPP_DEBUG(this->get_logger(), "Completed Phoenix6 Driver Node Initialization");
+    }
+
+    inline ~Phoenix6Driver()
+    {
+        this->sendSerialPowerDown();
+        // maybe need to pause here?
+        this->closeSerial();
     }
 
     #undef INIT_TALON_PUB_SUB
@@ -141,6 +157,11 @@ private:
             m.SetControl(phx6::controls::NeutralOut{});
         }
     }
+
+    void initSerial();
+    void sendSerialPowerDown();
+    void sendSerialPowerUp();
+    inline void closeSerial() { close(this->serial_port); }
 
     void feed_watchdog_status(int32_t status);
     // Function to setup motors for the robot
@@ -175,6 +196,7 @@ private:
     std::array<std::reference_wrapper<TalonFXPubSub>, 4>
         motor_pub_subs{ { track_right_pub_sub, track_left_pub_sub, trencher_pub_sub, hopper_belt_pub_sub } };
 
+    int serial_port;
     bool is_disabled = true;
 
 };
@@ -238,6 +260,62 @@ TalonFaults& operator<<(TalonFaults& faults, TalonFX& m)
 }
 
 
+void Phoenix6Driver::initSerial()
+{
+    const char* port = "/dev/ttyACM0";
+    this->serial_port = open(port, O_RDWR | O_NOCTTY | O_SYNC);
+
+    if(this->serial_port < 0)
+    {
+        RCLCPP_ERROR(this->get_logger(), "Failed to open serial port %s for motor resets!", port);
+        return;
+    }
+
+    // Configure port
+    termios tty;
+    memset(&tty, 0, sizeof(tty));
+    if(tcgetattr(this->serial_port, &tty) != 0)
+    {
+        RCLCPP_ERROR(this->get_logger(), "Error configuring (tcgetattr) serial port %s for motor resets!", port);
+        return;
+    }
+
+    cfsetospeed(&tty, B9600);
+    cfsetispeed(&tty, B9600);
+
+    tty.c_cflag |= (CLOCAL | CREAD);    // enable receiver, ignore modem ctrl lines
+    tty.c_cflag &= ~CSIZE;
+    tty.c_cflag |= CS8;                 // 8 bits
+    tty.c_cflag &= ~PARENB;             // no parity
+    tty.c_cflag &= ~CSTOPB;             // 1 stop bit
+    tty.c_cflag &= ~CRTSCTS;            // no flow control
+
+    tty.c_lflag = 0;                    // no signaling chars, no echo
+    tty.c_oflag = 0;                    // no remapping, no delays
+    tty.c_cc[VMIN]  = 1;                // read doesn't return until at least 1 char
+    tty.c_cc[VTIME] = 5;                // 0.5 seconds read timeout
+
+    if(tcsetattr(this->serial_port, TCSANOW, &tty) != 0)
+    {
+        RCLCPP_ERROR(this->get_logger(), "Error configuring (tcsetattr) serial port %s for motor resets!", port);
+        return;
+    }
+}
+
+void Phoenix6Driver::sendSerialPowerDown()
+{
+    write(this->serial_port, "0", 1);
+}
+void Phoenix6Driver::sendSerialPowerUp()
+{
+    write(this->serial_port, "1", 1);
+
+    std::this_thread::sleep_for(TALONFX_BOOTUP_DELAY);
+
+    this->configure_motors_cb();
+    this->neutralAll();
+}
+
 void Phoenix6Driver::feed_watchdog_status(int32_t status)
 {
     /* Watchdog feed decoding:
@@ -300,9 +378,18 @@ void Phoenix6Driver::pub_motor_fault_cb()
     TalonFaults talon_faults_msg{};
     talon_faults_msg.header.stamp = this->get_clock()->now();
 
+    bool any_faults = false;
     for(size_t i = 0; i < 4; i++)
     {
         this->motor_pub_subs[i].get().faults_pub->publish( (talon_faults_msg << this->motors[i]) );
+        any_faults |= talon_faults_msg.faults;
+    }
+
+    if(any_faults)
+    {
+        this->sendSerialPowerDown();
+        std::this_thread::sleep_for(TALONFX_POWER_CYCLE_DELAY);
+        this->sendSerialPowerUp();
     }
 }
 
