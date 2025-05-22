@@ -5,9 +5,10 @@
 #include <ctime>
 #include <deque>
 #include <chrono>
-#include <iostream>
 #include <vector>
 #include <numeric>
+#include <iostream>
+
 
 using system_time = std::chrono::system_clock;
 using system_time_point = system_time::time_point;
@@ -27,17 +28,17 @@ namespace util {
         return std::abs(val) < deadband ? 0. : val;
     }
 
-    // frc::DifferentialDrive::WheelSpeeds computeWheelScalars(double x, double y, double mag_deadzone)
-    // {
-    //     const double augmented_angle = std::atan2(x, y) + (PI / 4.0);	// x and y are inverted to make a CW "heading" angle
-    //     double magnitude = std::sqrt(x*x + y*y);
-    //     if (magnitude < mag_deadzone) return { 0.0, 0.0 };
+    std::array<double, 2> computeWheelScalars(double x, double y, double mag_deadzone)
+    {
+        const double augmented_angle = std::atan2(x, y) + (PI / 4.0);	// x and y are inverted to make a CW "heading" angle
+        double magnitude = std::sqrt(x*x + y*y);
+        if (magnitude < mag_deadzone) return { 0.0, 0.0 };
 
-    //     return {
-    //         magnitude * std::sin(augmented_angle),
-    //         magnitude * std::cos(augmented_angle)		// this is the same as cos("raw theta" - pi/4) like from the original code
-    //     };
-    // }
+        return {
+            magnitude * std::sin(augmented_angle),
+            magnitude * std::cos(augmented_angle)		// this is the same as cos("raw theta" - pi/4) like from the original code
+        };
+    }
 }
 
 
@@ -336,7 +337,7 @@ void RobotControl::periodic_handle_mining()
                         {
                             const double adjustment_raw =
                                 util::apply_deadband(
-                                    this->logitech.GetRawAxis(RobotControl::TELEOP_TRENCHER_SPEED_AXIS_IDX),
+                                    this->getRawAxis(RobotControl::TELEOP_TRENCHER_SPEED_AXIS_IDX),
                                     RobotControl::GENERIC_DEADZONE_SCALAR
                                 );
 
@@ -347,7 +348,7 @@ void RobotControl::periodic_handle_mining()
                             double target_depth = RobotControl::MINING_DEPTH_NOMINAL_POT_VALUE;
                             const double adjustment_raw =
                                 util::apply_deadband(
-                                    -this->logitech.GetRawAxis(RobotControl::TELEOP_HOPPER_ACTUATE_AXIS_IDX),
+                                    -this->getRawAxis(RobotControl::TELEOP_HOPPER_ACTUATE_AXIS_IDX),
                                     RobotControl::GENERIC_DEADZONE_SCALAR
                                 );
 
@@ -373,7 +374,7 @@ void RobotControl::periodic_handle_mining()
                         {
                             const double adjustment_raw =
                                 util::apply_deadband(
-                                    -this->logitech.GetRawAxis(RobotControl::TELEOP_DRIVE_Y_AXIS_IDX),
+                                    -this->getRawAxis(RobotControl::TELEOP_DRIVE_Y_AXIS_IDX),
                                     RobotControl::DRIVING_MAGNITUDE_DEADZONE_SCALAR
                                 );
 
@@ -478,7 +479,7 @@ void RobotControl::periodic_handle_offload()
             const double vel_cmd =
                 (RobotControl::TRACKS_MAX_VELO * RobotControl::DRIVING_LOW_SPEED_SCALAR * this->state.driving_speed_scalar) *
                     util::apply_deadband(
-                        -this->logitech.GetRawAxis(RobotControl::TELEOP_DRIVE_Y_AXIS_IDX),
+                        -this->getRawAxis(RobotControl::TELEOP_DRIVE_Y_AXIS_IDX),
                         RobotControl::DRIVING_MAGNITUDE_DEADZONE_SCALAR );
 
             this->motor_commands.track_right
@@ -595,17 +596,16 @@ void RobotControl::periodic_handle_teleop_input()
 {
     // speed changes -- these don't affect autos so we can run them during every loop to make it as intuitive as possible
     {
-        if(logitech.GetRawButtonPressed(RobotControl::TELEOP_LOW_SPEED_BUTTON_IDX))
+        if(this->getButtonPressed(RobotControl::TELEOP_LOW_SPEED_BUTTON_IDX))
             this->state.driving_speed_scalar = RobotControl::DRIVING_LOW_SPEED_SCALAR;
-        if(logitech.GetRawButtonPressed(RobotControl::TELEOP_MEDIUM_SPEED_BUTTON_IDX))
+        if(this->getButtonPressed(RobotControl::TELEOP_MEDIUM_SPEED_BUTTON_IDX))
             this->state.driving_speed_scalar = RobotControl::DRIVING_MEDIUM_SPEED_SCALAR;
-        if(logitech.GetRawButtonPressed(RobotControl::TELEOP_HIGH_SPEED_BUTTON_IDX))
+        if(this->getButtonPressed(RobotControl::TELEOP_HIGH_SPEED_BUTTON_IDX))
             this->state.driving_speed_scalar = RobotControl::DRIVING_HIGH_SPEED_SCALAR;
     }
 
     // ------------ HARD RESET ------------
-    if( logitech.GetRawButton(RobotControl::DISABLE_ALL_ACTIONS_BUTTON_IDX) /*||
-        logitech.GetRawButtonPressed(RobotControl::DISABLE_ALL_ACTIONS_BUTTON_IDX)*/)	// little sus but should handle all presses
+    if( this->getRawButton(RobotControl::DISABLE_ALL_ACTIONS_BUTTON_IDX) )
     {
         this->stop_all();	// gets called later
         this->state.control_level = RobotControl::State::ControlLevel::MANUAL;
@@ -624,22 +624,33 @@ void RobotControl::periodic_handle_teleop_input()
 
     // ---------- TELEAUTO CONTROl ----------
     {
-        if(!any_ops_running && logitech.GetPOV(0) == RobotControl::TELEAUTO_MINING_INIT_POV) {		// dpad top
+        if( !any_ops_running &&
+            this->getPov(RobotControl::TELEAUTO_MINING_INIT_POV_ID, RobotControl::TELEAUTO_MINING_INIT_POV_VAL) )   // dpad top
+        {
             this->start_mining(RobotControl::State::ControlLevel::TELEAUTO_OP);
-        } else
-        if(is_teleauto && is_mining && logitech.GetPOV(0) == RobotControl::TELEAUTO_MINING_STOP_POV) {	// dpad bottom
+        }
+        else
+        if( is_teleauto && is_mining &&
+            this->getPov(RobotControl::TELEAUTO_MINING_STOP_POV_ID, RobotControl::TELEAUTO_MINING_STOP_POV_VAL) )   // dpad bottom
+        {
             this->cancel_mining();
-        } else
-        if(!any_ops_running && logitech.GetPOV(0) == RobotControl::TELEAUTO_OFFLOAD_INIT_POV) {	// dpad right
+        }
+        else
+        if( !any_ops_running &&
+            this->getPov(RobotControl::TELEAUTO_OFFLOAD_INIT_POV_ID, RobotControl::TELEAUTO_OFFLOAD_INIT_POV_VAL) ) // dpad right
+        {
             this->start_offload(RobotControl::State::ControlLevel::TELEAUTO_OP);
-        } else
-        if(is_teleauto && is_offload && logitech.GetPOV(0) == RobotControl::TELEAUTO_OFFLOAD_STOP_POV) {	// dpad left
+        }
+        else
+        if( is_teleauto && is_offload &&
+            this->getPov(RobotControl::TELEAUTO_OFFLOAD_STOP_POV_ID, RobotControl::TELEAUTO_OFFLOAD_STOP_POV_VAL) ) // dpad left
+        {
             this->cancel_mining();
         }
     }
 
     // -------------- ASSISTED CONTROL ------------
-    if(logitech.GetRawButtonPressed(RobotControl::ASSISTED_MINING_TOGGLE_BUTTON_IDX) && !this->state.offload.enabled)
+    if(this->getButtonPressed(RobotControl::ASSISTED_MINING_TOGGLE_BUTTON_IDX) && !this->state.offload.enabled)
     {
         if(this->state.mining.enabled)
         {
@@ -648,7 +659,7 @@ void RobotControl::periodic_handle_teleop_input()
         }
         else this->start_mining(RobotControl::State::ControlLevel::ASSISTED_MANUAL);
     } else
-    if(logitech.GetRawButtonPressed(RobotControl::ASSISTED_OFFLOAD_TOGGLE_BUTTON_IDX) && !this->state.mining.enabled)
+    if(this->getButtonPressed(RobotControl::ASSISTED_OFFLOAD_TOGGLE_BUTTON_IDX) && !this->state.mining.enabled)
     {
         if(this->state.offload.enabled)
         {
@@ -662,55 +673,52 @@ void RobotControl::periodic_handle_teleop_input()
 
     // ------- DRIVE CONTROL ------------
     {
-        ctre::phoenix6::controls::VelocityVoltage
-            vel_command{ 0_tps, RobotControl::MOTOR_SETPOINT_ACC, false };
         const double
-            stick_x = logitech.GetRawAxis(RobotControl::TELEOP_DRIVE_X_AXIS_IDX),
-            stick_y = -logitech.GetRawAxis(RobotControl::TELEOP_DRIVE_Y_AXIS_IDX);	// forward y is positive
+            stick_x = this->getRawAxis(RobotControl::TELEOP_DRIVE_X_AXIS_IDX),
+            stick_y = -this->getRawAxis(RobotControl::TELEOP_DRIVE_Y_AXIS_IDX);	// forward y is positive
 
         auto track_speeds = util::computeWheelScalars(stick_x, stick_y, RobotControl::DRIVING_MAGNITUDE_DEADZONE_SCALAR);
 
         // set drive velocities
-        track_right.SetControl(
-            vel_command.WithVelocity(
-                RobotControl::TRACKS_MAX_VELO * this->state.driving_speed_scalar * track_speeds.right
-            ));
-        track_left.SetControl(
-            vel_command.WithVelocity(
-                RobotControl::TRACKS_MAX_VELO * this->state.driving_speed_scalar * track_speeds.left
-            ));
+        this->motor_commands.track_right
+            .set__mode(TalonCtrl::VELOCITY)
+            .set__value(RobotControl::TRACKS_MAX_VELO * this->state.driving_speed_scalar * track_speeds[0]);
+        this->motor_commands.track_left
+            .set__mode(TalonCtrl::VELOCITY)
+            .set__value(RobotControl::TRACKS_MAX_VELO * this->state.driving_speed_scalar * track_speeds[1]);
     }
     // ------------ TRENCHER CONTROL -------------
     {
-        double trencher_speed = logitech.GetRawAxis(RobotControl::TELEOP_TRENCHER_SPEED_AXIS_IDX);
-        if (logitech.GetRawButton(RobotControl::TELEOP_TRENCHER_INVERT_BUTTON_IDX)) trencher_speed *= -1.0;
+        double trencher_speed = this->getRawAxis(RobotControl::TELEOP_TRENCHER_SPEED_AXIS_IDX);
+        if(this->getRawButton(RobotControl::TELEOP_TRENCHER_INVERT_BUTTON_IDX))
+        {
+            trencher_speed *= -1.0;
+        }
 
         // set trencher velocity
-        trencher.SetControl(
-            ctre::phoenix6::controls::VelocityVoltage{
-                (RobotControl::TRENCHER_MAX_VELO * trencher_speed),
-                RobotControl::MOTOR_SETPOINT_ACC,
-                false
-            }
-        );
+        this->motor_commands.trencher
+            .set__mode(TalonCtrl::VELOCITY)
+            .set__value(RobotControl::TRENCHER_MAX_VELO * trencher_speed);
     }
     // ------------- HOPPER CONTROL --------------
     {
-        double hopper_belt_speed = -logitech.GetRawAxis(RobotControl::TELEOP_HOPPER_SPEED_AXIS_IDX);
-        if (logitech.GetRawButton(RobotControl::TELEOP_HOPPER_INVERT_BUTTON_IDX)) hopper_belt_speed *= -1.0;
+        double hopper_belt_speed = -this->getRawAxis(RobotControl::TELEOP_HOPPER_SPEED_AXIS_IDX);
+        if (this->getRawButton(RobotControl::TELEOP_HOPPER_INVERT_BUTTON_IDX))
+        {
+            hopper_belt_speed *= -1.0;
+        }
 
         // set hopper belt
-        hopper_belt.SetControl(
-            ctre::phoenix6::controls::VelocityVoltage{
-                (RobotControl::HOPPER_BELT_MAX_VELO * hopper_belt_speed),
-                RobotControl::MOTOR_SETPOINT_ACC,
-                false
-            }
-        );
+        this->motor_commands.hopper_belt
+            .set__mode(TalonCtrl::VELOCITY)
+            .set__value(RobotControl::HOPPER_BELT_MAX_VELO * hopper_belt_speed);
         // set actutor power
-        hopper_actuator.Set(
-            frc::ApplyDeadband(logitech.GetRawAxis(RobotControl::TELEOP_HOPPER_ACTUATE_AXIS_IDX), RobotControl::GENERIC_DEADZONE_SCALAR)
-        );
+        this->motor_commands.hopper_actuator
+            .set__mode(TalonCtrl::PERCENT_OUTPUT)
+            .set__value(
+                util::apply_deadband(
+                    this->getRawAxis(RobotControl::TELEOP_HOPPER_ACTUATE_AXIS_IDX),
+                    RobotControl::GENERIC_DEADZONE_SCALAR ) );
     }
 }
 

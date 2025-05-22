@@ -34,11 +34,11 @@ namespace LogitechMapping
 
         namespace DPAD_K
         {
-            constexpr double DPAD_DOWN = -1.0;
-            constexpr double DPAD_UP = 1.0;
+            constexpr float DPAD_DOWN = -1.f;
+            constexpr float DPAD_UP = 1.f;
 
-            constexpr double DPAD_RIGHT = -1.0;
-            constexpr double DPAD_LEFT = 1.0;
+            constexpr float DPAD_RIGHT = -1.f;
+            constexpr float DPAD_LEFT = 1.f;
         } // namespace DPAD_K
 
         constexpr int NUM_AXES = 8;

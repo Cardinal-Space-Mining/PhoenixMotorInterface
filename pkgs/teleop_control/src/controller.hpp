@@ -164,6 +164,23 @@ protected:
         return this->curr_motor_states.hopper_actuator.position / 1000.;
     }
 
+    inline bool getRawButton(int id)
+    {
+        return this->curr_joystick_values.buttons[id];
+    }
+    inline bool getButtonPressed(int id)
+    {
+        return !this->prev_joystick_values.buttons[id] && this->curr_joystick_values.buttons[id];
+    }
+    inline float getRawAxis(int id)
+    {
+        return this->curr_joystick_values.axes[id];
+    }
+    inline bool getPov(int id, float val)
+    {
+        return this->curr_joystick_values.axes[id] == val;
+    }
+
 protected:
     void start_mining(RobotControl::State::ControlLevel op_level);
     void cancel_mining();
@@ -239,13 +256,19 @@ public:
         TELEOP_HOPPER_SPEED_AXIS_IDX = LogitechMapping::Axes::L_TRIGGER,
         TELEOP_HOPPER_INVERT_BUTTON_IDX = LogitechMapping::Buttons::LB,
         TELEOP_HOPPER_ACTUATE_AXIS_IDX = LogitechMapping::Axes::RIGHTY,
-
-        // TELEAUTO_MINING_INIT_POV = LogitechMapping::DPAD_UP_POV,
-        // TELEAUTO_MINING_STOP_POV = LogitechMapping::DPAD_DOWN_POV,
-        // TELEAUTO_OFFLOAD_INIT_POV = LogitechMapping::DPAD_RIGHT_POV,
-        // TELEAUTO_OFFLOAD_STOP_POV = LogitechMapping::DPAD_LEFT_POV,
-
+        
         ASSISTED_MINING_TOGGLE_BUTTON_IDX = LogitechMapping::Buttons::L_STICK,
-        ASSISTED_OFFLOAD_TOGGLE_BUTTON_IDX = LogitechMapping::Buttons::R_STICK;
+        ASSISTED_OFFLOAD_TOGGLE_BUTTON_IDX = LogitechMapping::Buttons::R_STICK,
+
+        TELEAUTO_MINING_INIT_POV_ID = LogitechMapping::Axes::DPAD_U_D,
+        TELEAUTO_MINING_STOP_POV_ID = LogitechMapping::Axes::DPAD_U_D,
+        TELEAUTO_OFFLOAD_INIT_POV_ID = LogitechMapping::Axes::DPAD_R_L,
+        TELEAUTO_OFFLOAD_STOP_POV_ID = LogitechMapping::Axes::DPAD_R_L;
+
+    static constexpr float
+        TELEAUTO_MINING_INIT_POV_VAL = LogitechMapping::Axes::DPAD_K::DPAD_UP,
+        TELEAUTO_MINING_STOP_POV_VAL = LogitechMapping::Axes::DPAD_K::DPAD_DOWN,
+        TELEAUTO_OFFLOAD_INIT_POV_VAL = LogitechMapping::Axes::DPAD_K::DPAD_RIGHT,
+        TELEAUTO_OFFLOAD_STOP_POV_VAL = LogitechMapping::Axes::DPAD_K::DPAD_LEFT;
 
 };
