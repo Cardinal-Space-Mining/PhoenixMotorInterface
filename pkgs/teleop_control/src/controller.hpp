@@ -13,6 +13,7 @@ using JoyMsg = sensor_msgs::msg::Joy;
 
 class RobotControl
 {
+    using system_time = std::chrono::system_clock;
     using system_time_point = system_time::time_point;
 
     enum RobotMode
@@ -159,7 +160,7 @@ protected:
         this->disable_motors();
     }
 
-    inline double get_hopper_pot();
+    inline double get_hopper_pot()
     {
         return this->curr_motor_states.hopper_actuator.position / 1000.;
     }

@@ -58,9 +58,70 @@ RobotMotorCommands& RobotControl::update(
     this->curr_joystick_values = joystick_values;
 
     this->curr_motor_states = motor_status;
-    this->motor_commands = RobotMotorCommands{};
+    this->motor_commands = RobotMotorCommands();
 
     // handle robot mode transitions
+    {
+        switch(this->curr_robot_mode)
+        {
+            case RobotMode::DISABLED:
+            {
+                // switch(this->prev_robot_mode)
+                // {
+                //     case RobotMode::ENABLED:
+                //     {
+                //         this->state.last_manual_control_level = this->state.control_level;
+                //     }
+                //     case RobotMode::AUTONOMOUS:
+                //     {
+                        
+                //     }
+                // }
+
+                break;
+            }
+            case RobotMode::ENABLED:
+            {
+                switch(this->prev_robot_mode)
+                {
+                    case RobotMode::DISABLED:
+                    case RobotMode::AUTONOMOUS:
+                    {
+                        this->stop_all();
+                        this->state.control_level = this->state.last_manual_control_level;
+                        break;
+                    }
+                    default: {}
+                    break;
+                }
+
+                this->periodic_handle_teleop_input();
+                break;
+            }
+            case RobotMode::AUTONOMOUS:
+            {
+                switch(this->prev_robot_mode)
+                {
+                    case RobotMode::ENABLED:
+                    {
+                        this->state.last_manual_control_level = this->state.control_level;
+                    }
+                    case RobotMode::DISABLED:
+                    {
+                        this->stop_all();
+                        this->state.control_level = RobotControl::State::ControlLevel::FULL_AUTO;
+                        break;
+                    }
+                    default: break;
+                }
+
+                break;
+            }
+        }
+
+        this->periodic_handle_mining();
+        this->periodic_handle_offload();
+    }
 
     return this->motor_commands;
 }
@@ -440,7 +501,7 @@ void RobotControl::periodic_handle_mining()
                     // set actuator
                     this->motor_commands.hopper_actuator
                         .set__mode(TalonCtrl::PERCENT_OUTPUT)
-                        .set__value(-RobotControl::HOPPER_ACTUATOR_EXTRACT_SPEED)
+                        .set__value(-RobotControl::HOPPER_ACTUATOR_EXTRACT_SPEED);
                     break;
                 }
                 else
@@ -484,10 +545,10 @@ void RobotControl::periodic_handle_offload()
 
             this->motor_commands.track_right
                 .set__mode(TalonCtrl::VELOCITY)
-                .set_value(vel_cmd);
+                .set__value(vel_cmd);
             this->motor_commands.track_left
                 .set__mode(TalonCtrl::VELOCITY)
-                .set_value(vel_cmd);
+                .set__value(vel_cmd);
         }
 
         switch(this->state.offload.stage) {
@@ -503,16 +564,16 @@ void RobotControl::periodic_handle_offload()
                 {
                     const double duration = util::seconds_since(this->state.offload.start_time);
                     if( !cancelled &&
-                        (is_full_auto && duration < this->state.offload.auto_target_backup_time) ||
-                        (!is_full_auto && duration < this->state.offload.tele_target_backup_time) )		// use serial_control state for this if deemed reliable enough
+                        ((is_full_auto && duration < this->state.offload.auto_target_backup_time) ||
+                        (!is_full_auto && duration < this->state.offload.tele_target_backup_time)) )		// use serial_control state for this if deemed reliable enough
                     {
                         // drive backwards
                         this->motor_commands.track_right
                             .set__mode(TalonCtrl::VELOCITY)
-                            .set_value(-RobotControl::TRACKS_OFFLOAD_VELO);
+                            .set__value(-RobotControl::TRACKS_OFFLOAD_VELO);
                         this->motor_commands.track_left
                             .set__mode(TalonCtrl::VELOCITY)
-                            .set_value(-RobotControl::TRACKS_OFFLOAD_VELO);
+                            .set__value(-RobotControl::TRACKS_OFFLOAD_VELO);
 
                         break;
                     }
