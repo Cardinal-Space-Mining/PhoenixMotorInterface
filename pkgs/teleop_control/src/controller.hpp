@@ -3,17 +3,40 @@
 #include <cstdint>
 #include <chrono>
 
-#include "logitech.hpp"
+#include "sensor_msgs/msg/joy.hpp"
 
+#include "motor_interface.hpp"
+#include "logitech_map.hpp"
+
+
+using JoyMsg = sensor_msgs::msg::Joy;
 
 class RobotControl
 {
-    using system_time = std::chrono::system_clock;
     using system_time_point = system_time::time_point;
+
+    enum RobotMode
+    {
+        DISABLED,
+        ENABLED,
+        AUTONOMOUS
+    };
+
+    inline static RobotMode getMode(int32_t status)
+    {
+        return status > 0 ? RobotMode::ENABLED : (status < 0 ? RobotMode::AUTONOMOUS : RobotMode::DISABLED);
+    }
 
 public:
     RobotControl();
     ~RobotControl();
+
+public:
+    /** Iterates control logic based on robot mode, joystick input, and motor statuses */
+    RobotMotorCommands& update(
+        int32_t robot_status,
+        const JoyMsg& joystick_values,
+        const RobotMotorStatus& motor_status );
 
 // public:
 //     void RobotInit() override;
@@ -31,6 +54,17 @@ public:
 //     void SimulationPeriodic() override;
 
 private:
+    JoyMsg
+        prev_joystick_values,
+        curr_joystick_values;
+    RobotMode
+        prev_robot_mode{ RobotMode::DISABLED },
+        curr_robot_mode{ RobotMode::DISABLED };
+    RobotMotorStatus
+        curr_motor_states;
+    RobotMotorCommands
+        motor_commands;
+
     class State
     {
     public:
@@ -110,13 +144,25 @@ private:
     }
     state;
 
-
 protected:
-    void configure_motors();
-    void disable_motors();
-    void stop_all();
+    inline void disable_motors()
+    {
+        this->motor_commands.track_left.set__mode(TalonCtrl::DISABLED);
+        this->motor_commands.track_right.set__mode(TalonCtrl::DISABLED);
+        this->motor_commands.trencher.set__mode(TalonCtrl::DISABLED);
+        this->motor_commands.hopper_belt.set__mode(TalonCtrl::DISABLED);
+        this->motor_commands.hopper_actuator.set__mode(TalonCtrl::DISABLED);
+    }
+    inline void stop_all()
+    {
+        this->state.reset_auto_states();
+        this->disable_motors();
+    }
 
-    double get_hopper_pot();
+    inline double get_hopper_pot();
+    {
+        return this->curr_motor_states.hopper_actuator.position / 1000.;
+    }
 
 protected:
     void start_mining(RobotControl::State::ControlLevel op_level);
@@ -178,28 +224,28 @@ public:
         HOPPER_BELT_TIME_OFF_SECONDS = 2.5;
 
     static constexpr int
-        DISABLE_ALL_ACTIONS_BUTTON_IDX = LogitechConstants::BUTTON_A,
+        DISABLE_ALL_ACTIONS_BUTTON_IDX = LogitechMapping::Buttons::A,
 
-        TELEOP_LOW_SPEED_BUTTON_IDX = LogitechConstants::BUTTON_B,
-        TELEOP_MEDIUM_SPEED_BUTTON_IDX = LogitechConstants::BUTTON_Y,
-        TELEOP_HIGH_SPEED_BUTTON_IDX = LogitechConstants::BUTTON_X,
+        TELEOP_LOW_SPEED_BUTTON_IDX = LogitechMapping::Buttons::B,
+        TELEOP_MEDIUM_SPEED_BUTTON_IDX = LogitechMapping::Buttons::Y,
+        TELEOP_HIGH_SPEED_BUTTON_IDX = LogitechMapping::Buttons::X,
 
-        TELEOP_DRIVE_X_AXIS_IDX = LogitechConstants::LEFT_JOY_X,
-        TELEOP_DRIVE_Y_AXIS_IDX = LogitechConstants::LEFT_JOY_Y,
+        TELEOP_DRIVE_X_AXIS_IDX = LogitechMapping::Axes::LEFTX,
+        TELEOP_DRIVE_Y_AXIS_IDX = LogitechMapping::Axes::LEFTY,
 
-        TELEOP_TRENCHER_SPEED_AXIS_IDX = LogitechConstants::RIGHT_TRIGGER,
-        TELEOP_TRENCHER_INVERT_BUTTON_IDX = LogitechConstants::RB,
+        TELEOP_TRENCHER_SPEED_AXIS_IDX = LogitechMapping::Axes::R_TRIGGER,
+        TELEOP_TRENCHER_INVERT_BUTTON_IDX = LogitechMapping::Buttons::RB,
 
-        TELEOP_HOPPER_SPEED_AXIS_IDX = LogitechConstants::LEFT_TRIGGER,
-        TELEOP_HOPPER_INVERT_BUTTON_IDX = LogitechConstants::LB,
-        TELEOP_HOPPER_ACTUATE_AXIS_IDX = LogitechConstants::RIGHT_JOY_Y,
+        TELEOP_HOPPER_SPEED_AXIS_IDX = LogitechMapping::Axes::L_TRIGGER,
+        TELEOP_HOPPER_INVERT_BUTTON_IDX = LogitechMapping::Buttons::LB,
+        TELEOP_HOPPER_ACTUATE_AXIS_IDX = LogitechMapping::Axes::RIGHTY,
 
-        TELEAUTO_MINING_INIT_POV = LogitechConstants::DPAD_UP_POV,
-        TELEAUTO_MINING_STOP_POV = LogitechConstants::DPAD_DOWN_POV,
-        TELEAUTO_OFFLOAD_INIT_POV = LogitechConstants::DPAD_RIGHT_POV,
-        TELEAUTO_OFFLOAD_STOP_POV = LogitechConstants::DPAD_LEFT_POV,
+        // TELEAUTO_MINING_INIT_POV = LogitechMapping::DPAD_UP_POV,
+        // TELEAUTO_MINING_STOP_POV = LogitechMapping::DPAD_DOWN_POV,
+        // TELEAUTO_OFFLOAD_INIT_POV = LogitechMapping::DPAD_RIGHT_POV,
+        // TELEAUTO_OFFLOAD_STOP_POV = LogitechMapping::DPAD_LEFT_POV,
 
-        ASSISTED_MINING_TOGGLE_BUTTON_IDX = LogitechConstants::LEFT_JOY_DOWN,
-        ASSISTED_OFFLOAD_TOGGLE_BUTTON_IDX = LogitechConstants::RIGHT_JOY_DOWN;
+        ASSISTED_MINING_TOGGLE_BUTTON_IDX = LogitechMapping::Buttons::L_STICK,
+        ASSISTED_OFFLOAD_TOGGLE_BUTTON_IDX = LogitechMapping::Buttons::R_STICK;
 
 };

@@ -432,10 +432,8 @@ void Phoenix6Driver::execute_ctrl_cb(TalonFX &motor, const TalonCtrl &msg)
             case TalonCtrl::VELOCITY:
             {
                 motor.SetControl(
-                    phx6::controls::VelocityVoltage{
-                        units::angular_velocity::turns_per_second_t{ msg.value },
-                        TalonRuntimeConfig::MOTOR_VELOCITY_SETPOINT_ACC,
-                        false } );
+                    phx6::controls::VelocityVoltage{ units::angular_velocity::turns_per_second_t{ msg.value } }
+                        .WithAcceleration(TalonRuntimeConfig::MOTOR_VELOCITY_SETPOINT_ACC) );
                 break;
             }
             case TalonCtrl::CURRENT:

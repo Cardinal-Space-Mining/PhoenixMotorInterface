@@ -1,6 +1,6 @@
-#include "teleop_control/states.hpp"
-#include "teleop_control/logitech_map.hpp"
-#include "teleop_control/robot_constants.hpp"
+#include "states.hpp"
+#include "logitech_map.hpp"
+#include "robot_constants.hpp"
 
 #include <cmath>
 #include <numbers>
@@ -48,8 +48,8 @@ namespace
 
 
 bool TeleopStateMachine::update(
-    MotorCommands& settings,
-    const RobotMotorInfo& motor_info,
+    RobotMotorCommands& settings,
+    const RobotMotorStatus& motor_info,
     const JoyMsg& ctrl )
 {
     if( ctrl.axes.size() < LogitechMapping::Axes::NUM_AXES ||
@@ -88,7 +88,7 @@ bool TeleopStateMachine::update(
 }
 
 
-void TeleopStateMachine::setControlMode(RobotControlMode state, const RobotMotorInfo& motor_info)
+void TeleopStateMachine::setControlMode(RobotControlMode state, const RobotMotorStatus& motor_info)
 {
     switch(state)
     {
@@ -113,8 +113,8 @@ void TeleopStateMachine::setControlMode(RobotControlMode state, const RobotMotor
 }
 
 bool TeleopStateMachine::runManualMode(
-    MotorCommands& settings,
-    const RobotMotorInfo& motor_info,
+    RobotMotorCommands& settings,
+    const RobotMotorStatus& motor_info,
     const JoyMsg& ctrl )
 {
     // State Transitions
@@ -227,8 +227,8 @@ bool TeleopStateMachine::runManualMode(
 }
 
 bool TeleopStateMachine::runTrenchCommand(
-    MotorCommands& settings,
-    const RobotMotorInfo& motor_info,
+    RobotMotorCommands& settings,
+    const RobotMotorStatus& motor_info,
     const JoyMsg& ctrl )
 {
     TrenchInfo& command_state = std::get<TrenchInfo>(command_data);
@@ -313,8 +313,8 @@ bool TeleopStateMachine::runTrenchCommand(
 }
 
 bool TeleopStateMachine::runOffloadCommand(
-    MotorCommands& settings,
-    const RobotMotorInfo& motor_info,
+    RobotMotorCommands& settings,
+    const RobotMotorStatus& motor_info,
     const JoyMsg& ctrl )
 {
     OffloadInfo& state = std::get<OffloadInfo>(this->command_data);

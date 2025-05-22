@@ -12,7 +12,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(talon_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 
-add_executable(main src/main.cpp src/states.cpp)
+add_executable(main src/main.cpp src/controller.cpp)
 
 ament_target_dependencies(main rclcpp sensor_msgs std_msgs talon_msgs)
 
