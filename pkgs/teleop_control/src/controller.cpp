@@ -471,7 +471,7 @@ void RobotControl::periodic_handle_mining()
                     {
                         this->motor_commands.hopper_belt
                             .set__mode(TalonCtrl::VELOCITY)
-                            .set__value(-RobotControl::HOPPER_BELT_MAX_MINING_VELO);
+                            .set__value(RobotControl::HOPPER_BELT_MAX_MINING_VELO);
                     }
                     else
                     {
@@ -490,9 +490,9 @@ void RobotControl::periodic_handle_mining()
                 }
                 else
                 {
-                    this->motor_commands.track_left.mode =
-                        this->motor_commands.track_right.mode =
-                        this->motor_commands.hopper_belt.mode = TalonCtrl::DISABLED;
+                    util::disableMotor(this->motor_commands.track_left);
+                    util::disableMotor(this->motor_commands.track_right);
+                    util::disableMotor(this->motor_commands.hopper_belt);
                     this->state.mining.stage = RobotControl::State::MiningStage::RAISING_HOPPER;
                     // allow fallthrough
                 }
@@ -589,8 +589,8 @@ void RobotControl::periodic_handle_offload()
                     }
                     else
                     {
-                        this->motor_commands.track_left.mode =
-                            this->motor_commands.track_right.mode = TalonCtrl::DISABLED;
+                        util::disableMotor(this->motor_commands.track_left);
+                        util::disableMotor(this->motor_commands.track_right);
                         // fallthrough to apply next stage
                     }
                 }
@@ -621,7 +621,7 @@ void RobotControl::periodic_handle_offload()
                     // set hopper belt
                     this->motor_commands.hopper_belt
                         .set__mode(TalonCtrl::VELOCITY)
-                        .set__value(-RobotControl::HOPPER_BELT_MAX_VELO);
+                        .set__value(RobotControl::HOPPER_BELT_MAX_VELO);
                     break;
                 }
                 else
