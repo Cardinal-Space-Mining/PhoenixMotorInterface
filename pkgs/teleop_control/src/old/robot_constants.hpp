@@ -1,5 +1,4 @@
-#ifndef ROBOT_CONSTANTS_08_20_24_HPP
-#define ROBOT_CONSTANTS_08_20_24_HPP
+#pragma once
 
 constexpr long falcon_tps_to_pheonix_5_velo(long tps)
 {
@@ -68,5 +67,3 @@ static constexpr double
 
 
 } // namespace RobotConstants
-
-#endif

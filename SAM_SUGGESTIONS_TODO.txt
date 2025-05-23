@@ -4,3 +4,5 @@
     C. change motor command publisher behavior inside of control node based on robot state (instead of switching pubs in motor drivers)
     D. need to handle heartbeat during auto (don't necessarily stop auto if we disconnect?)
     E. [add autonomy plumbing -- motor status subs, topics for comms with perception node]
+
+2. Merge packages so utilities can be shared between drivers!
