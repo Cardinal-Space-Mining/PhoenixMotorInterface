@@ -5,6 +5,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/int32.hpp>
 #include <std_msgs/msg/int8.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
 
 #define Phoenix_No_WPI // remove WPI dependencies
 #include <ctre/Phoenix.h>
@@ -64,6 +65,7 @@ public:
                 TALON_CTRL_SUB_QOS,
                 [this](const TalonCtrl &msg){ this->execute_ctrl(this->hopper_actuator, msg); } )
         },
+        hopper_joint_pub{ this->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10) },
         watchdog_status_sub
         {
             this->create_subscription<std_msgs::msg::Int32>(
@@ -79,6 +81,8 @@ public:
         this->hopper_actuator.Config_kI(0, TalonStaticConfig::DEFAULT_GAINS.I);
         this->hopper_actuator.Config_kD(0, TalonStaticConfig::DEFAULT_GAINS.D);
         this->hopper_actuator.Config_kF(0, TalonStaticConfig::DEFAULT_GAINS.F);
+        this->hopper_actuator.ConfigSelectedFeedbackSensor(TalonSRXFeedbackDevice::Analog);
+        this->hopper_actuator.SetInverted(true);
         this->hopper_actuator.SetNeutralMode(NeutralMode::Brake);
         this->hopper_actuator.ConfigNeutralDeadband(5.);
         this->hopper_actuator.ClearStickyFaults();
@@ -103,7 +107,9 @@ private:
         hopper_faults_pub;
     rclcpp::Subscription<TalonCtrl>::SharedPtr
         hopper_ctrl_sub;
-
+        
+    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr
+        hopper_joint_pub;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr
         watchdog_status_sub;
     rclcpp::TimerBase::SharedPtr
@@ -117,7 +123,7 @@ private:
 
 TalonInfo& operator<<(TalonInfo& info, TalonSRX& m)
 {
-    info.position       = m.GetSelectedSensorPosition();
+    info.position       = -m.GetSelectedSensorPosition();
     info.velocity       = m.GetSelectedSensorVelocity();
 
     info.device_temp    = m.GetTemperature();
@@ -186,6 +192,12 @@ void Phoenix5Driver::pub_motor_info_cb()
     info_msg.enabled = !this->is_disabled;
 
     this->hopper_info_pub->publish( (info_msg << this->hopper_actuator) );
+
+    sensor_msgs::msg::JointState joint_msg{};
+    joint_msg.header.stamp = info_msg.header.stamp;
+    joint_msg.name.push_back("dump_joint");
+    joint_msg.position.push_back((M_PI / 180.) * (15. + info_msg.position / (-1000. / 30.)));
+    this->hopper_joint_pub->publish(joint_msg);
 }
 
 void Phoenix5Driver::pub_motor_fault_cb()
