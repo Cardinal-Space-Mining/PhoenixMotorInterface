@@ -13,7 +13,7 @@ using talon_msgs::msg::TalonCtrl;
 using talon_msgs::msg::TalonInfo;
 using JoyMsg = sensor_msgs::msg::Joy;
 
-struct MotorSettings
+struct RobotMotorCommands
 {
     TalonCtrl track_right;
     TalonCtrl track_left;
@@ -22,7 +22,7 @@ struct MotorSettings
     TalonCtrl hopper_actuator;
 };
 
-struct RobotMotorInfo
+struct RobotMotorStatus
 {
     TalonInfo track_right;
     TalonInfo track_left;
@@ -68,13 +68,13 @@ public:
     TeleopStateMachine() :
         command_data{ ManualInfo{} }
     {
-        RobotMotorInfo info;
+        RobotMotorStatus info;
         this->setControlMode(RobotControlMode::Manual, info);
     }
 
 public:
     bool update(
-        MotorSettings& settings,
+        MotorCommands& settings,
         const RobotMotorInfo& robot,
         const JoyMsg& ctrl );
 
@@ -84,15 +84,15 @@ private:
         const RobotMotorInfo& motor_info );
 
     bool runManualMode(
-        MotorSettings& settings,
+        MotorCommands& settings,
         const RobotMotorInfo& motor_info,
         const JoyMsg& ctrl );
     bool runTrenchCommand(
-        MotorSettings& settings,
+        MotorCommands& settings,
         const RobotMotorInfo& motor_info,
         const JoyMsg& ctrl );
     bool runOffloadCommand(
-        MotorSettings& settings,
+        MotorCommands& settings,
         const RobotMotorInfo& motor_info,
         const JoyMsg& ctrl );
 
