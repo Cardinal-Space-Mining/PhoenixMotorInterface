@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <chrono>
+#include <string>
 
 #include "sensor_msgs/msg/joy.hpp"
 
@@ -29,8 +30,8 @@ class RobotControl
     }
 
 public:
-    RobotControl();
-    ~RobotControl();
+    inline RobotControl() { this->stop_all(); }
+    ~RobotControl() = default;
 
 public:
     /** Iterates control logic based on robot mode, joystick input, and motor statuses */
@@ -39,20 +40,10 @@ public:
         const JoyMsg& joystick_values,
         const RobotMotorStatus& motor_status );
 
-// public:
-//     void RobotInit() override;
-//     void RobotPeriodic() override;
-//     void AutonomousInit() override;
-//     void AutonomousPeriodic() override;
-//     void TeleopInit() override;
-//     void TeleopPeriodic() override;
-//     void TeleopExit() override;
-//     void DisabledInit() override;
-//     void DisabledPeriodic() override;
-//     void TestInit() override;
-//     void TestPeriodic() override;
-//     void SimulationInit() override;
-//     void SimulationPeriodic() override;
+    void getStatusStrings(
+        std::string& control_level,
+        std::string& mining_status,
+        std::string& offload_status );
 
 private:
     JoyMsg
@@ -146,14 +137,7 @@ private:
     state;
 
 protected:
-    inline void disable_motors()
-    {
-        this->motor_commands.track_left.set__mode(TalonCtrl::DISABLED);
-        this->motor_commands.track_right.set__mode(TalonCtrl::DISABLED);
-        this->motor_commands.trencher.set__mode(TalonCtrl::DISABLED);
-        this->motor_commands.hopper_belt.set__mode(TalonCtrl::DISABLED);
-        this->motor_commands.hopper_actuator.set__mode(TalonCtrl::DISABLED);
-    }
+    inline void disable_motors();
     inline void stop_all()
     {
         this->state.reset_auto_states();
