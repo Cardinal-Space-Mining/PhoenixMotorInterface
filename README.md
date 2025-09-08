@@ -1,30 +1,35 @@
 # PhoenixMotorInterface
-Repo for development of the Phoenix Motor Interface for Autonomy and Teleop using ROS
+Phoenix 5/6 drivers for ROS2. Note that currently these are hard-configured for the LANCE-1.5 motor setup.
 
-## Nodes
+# Dependencies
+1. Ensure you have patchelf installed. Without it some build commands will silently fail and the `phx5_driver` will exit with a linking error.
+    - Run:
+        ```
+        sudo apt update
+        sudo apt install patchelf
+        ```
+2. Install the [CTRE Phoenix 6](https://v6.docs.ctr-electronics.com/en/stable/docs/installation/installation-nonfrc.html) library:
+    - Run (configure `YEAR` with the current year):
+        ```
+        YEAR=2025
+        sudo curl -s --compressed -o /usr/share/keyrings/ctr-pubkey.gpg "https://deb.ctr-electronics.com/ctr-pubkey.gpg"
+        sudo curl -s --compressed -o /etc/apt/sources.list.d/ctr${YEAR}.list "https://deb.ctr-electronics.com/ctr${YEAR}.list"
+        ```
+        *If you are installing on an arm machine, see the official documentation for changing the target distribution.*
+    - Run:
+        ```
+        sudo apt update
+        sudo apt install phoenix6
+        ```
 
-### Phoenix5 Node
-The Phoenix 5 Node is responsible for running motors controlled with a `Talon SRX`. This node will be used for motors like Linear Actuators (and torque motors). The `Talon SRX`'s are only supported by the Phoenix 5 API. This complicates out motor interface since for non-frc purposes we cannot have both Phoenix 5 and Phoenix 6 (TalonFX) APIs running together. The Phoenix 5 API also cannot be installed as a package and instead we are using it as a Library.
+# Usage
+The package exposes the nodes `phx5_driver` and `phx6_driver`, as well as launchfiles for each, although it is recommended to run the automated scripts to handle CAN startup/shutdown.
 
-#### Building Node
-Due to using Phoenix 5 as a library, colcon and CMake do not automatically link the library and executable.
-
-Start by navigating to the **root directory** of project: `pkgs`.
-
-If this is your first time building please use `colcon build --executor parallel --cmake-args=-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON`. Using the `--cmake-args=DCMAKE_EXPORT_COMPILE_COMMANDS` can be used to prevent error squiggles on non-standard C++ libraries (phoenix, ros, custom messages).
-
-Otherwise, if you have already build previously run `colcon build` or `colcon build --executor parallel`. 
-
-After compiling of code, you will need to link the Phoenix 5 library and the main executable together. To do this run the `patchelf_cmake_build_step.sh` bash script simply using `./patchelf_cmake_build_step.sh`. You should not get errors, if you do check the filepaths/filenames to make sure things are accurate.
-
-### Phoenix 6 Node
-
-#### Building Node
-
-
-## Running Executables
-For each node being ran, you will need 1 terminal for debugging purposes or push all tasks to the background (not easy to debug). Make sure to use `source install/setup.bash` to source all executables.
-
-Every node you want to run use `ros2 run <node package> <node name>`. i.e. '_ros2 run robot_phoenix5 main_'.
-
-Note: You do NOT need a terminal for the 'custom_types' node. This simply is just message type information.
+Run the phoenix 5 driver:
+```
+./scripts/launch_phoenix5_standalone.sh
+```
+Run the phoenix 6 driver:
+```
+./scripts/launch_phoenix6_standalone.sh
+```

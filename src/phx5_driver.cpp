@@ -13,16 +13,16 @@
 #include <ctre/phoenix/platform/Platform.hpp>
 #include <ctre/phoenix/unmanaged/Unmanaged.h>
 
-#include "talon_msgs/msg/talon_ctrl.hpp"
-#include "talon_msgs/msg/talon_info.hpp"
-#include "talon_msgs/msg/talon_faults.hpp"
+#include <phoenix_ros_driver/msg/talon_ctrl.hpp>
+#include <phoenix_ros_driver/msg/talon_info.hpp>
+#include <phoenix_ros_driver/msg/talon_faults.hpp>
 
 
 using namespace std::chrono_literals;
 
-using talon_msgs::msg::TalonCtrl;
-using talon_msgs::msg::TalonInfo;
-using talon_msgs::msg::TalonFaults;
+using phoenix_ros_driver::msg::TalonCtrl;
+using phoenix_ros_driver::msg::TalonInfo;
+using phoenix_ros_driver::msg::TalonFaults;
 using ctre::phoenix::motorcontrol::can::TalonSRX;
 
 

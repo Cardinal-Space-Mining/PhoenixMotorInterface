@@ -67,7 +67,7 @@ ament_target_dependencies(phx5_driver
     rclcpp
     std_msgs
     sensor_msgs)
-# target_compile_features(phx5_driver PUBLIC c_std_99 cxx_std_20)   # not sure if this necessary
+target_compile_features(phx5_driver PUBLIC c_std_99 cxx_std_20)     # not necessary but silences a lot of warnings
 
 # --- Phoenix 6 Driver ---------------------------------------------------------
 add_executable(phx6_driver src/phx6_driver.cpp)
@@ -79,7 +79,7 @@ ament_target_dependencies(phx6_driver
     phoenix6)
 
 # --- Talon Twist Driver -------------------------------------------------------
-add_executable(talon_twist_driver src/talon_twist.cpp)
+add_executable(talon_twist_driver src/talon_twist_driver.cpp)
 target_link_libraries(talon_twist_driver
     ${phoenix_ros_driver_custom_types})
 ament_target_dependencies(talon_twist_driver
@@ -101,6 +101,7 @@ install(TARGETS
     talon_twist_driver
     DESTINATION lib/${PROJECT_NAME} )
 install(DIRECTORY
+    launch
     scripts
     DESTINATION share/${PROJECT_NAME} )
 
@@ -117,4 +118,4 @@ install(CODE
 install(CODE
     "execute_process(COMMAND patchelf --set-rpath \
     ${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME} \
-    ${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}/main )" )
+    ${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}/phx5_driver )" )

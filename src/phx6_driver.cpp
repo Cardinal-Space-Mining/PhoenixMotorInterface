@@ -18,9 +18,9 @@
 #include <ctre/phoenix6/TalonFX.hpp>
 #include <ctre/phoenix6/unmanaged/Unmanaged.hpp>
 
-#include "talon_msgs/msg/talon_ctrl.hpp"
-#include "talon_msgs/msg/talon_info.hpp"
-#include "talon_msgs/msg/talon_faults.hpp"
+#include <phoenix_ros_driver/msg/talon_ctrl.hpp>
+#include <phoenix_ros_driver/msg/talon_info.hpp>
+#include <phoenix_ros_driver/msg/talon_faults.hpp>
 
 
 #define HARD_ENABLE 0
@@ -28,9 +28,9 @@
 #define phx6 ctre::phoenix6
 using namespace std::chrono_literals;
 
-using talon_msgs::msg::TalonCtrl;
-using talon_msgs::msg::TalonInfo;
-using talon_msgs::msg::TalonFaults;
+using phoenix_ros_driver::msg::TalonCtrl;
+using phoenix_ros_driver::msg::TalonInfo;
+using phoenix_ros_driver::msg::TalonFaults;
 using phx6::hardware::TalonFX;
 
 

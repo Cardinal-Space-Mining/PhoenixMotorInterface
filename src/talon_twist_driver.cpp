@@ -1,8 +1,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
-#include <talon_msgs/msg/talon_ctrl.hpp>
+#include <phoenix_ros_driver/msg/talon_ctrl.hpp>
 
-using talon_msgs::msg::TalonCtrl;
+using phoenix_ros_driver::msg::TalonCtrl;
 
 class TwistToTalon : public rclcpp::Node {
     public:

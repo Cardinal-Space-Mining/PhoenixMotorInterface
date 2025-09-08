@@ -9,9 +9,9 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("arduino_device", default_value="/dev/ttyACM0"),
         Node(
-            name = 'phoenix6_driver',
-            package = 'phoenix6_driver',
-            executable = 'main',
+            name = 'phx6_driver',
+            package = 'phoenix_ros_driver',
+            executable = 'phx6_driver',
             output = 'screen',
             parameters = [
                 {'arduino_device': LaunchConfiguration("arduino_device", default="/dev/ttyACM0") }
